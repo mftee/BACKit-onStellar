@@ -14,7 +14,7 @@ use events::{
     emit_batch_payout_started, emit_fee_collected, emit_outcome_disputed, emit_outcome_finalized,
     emit_outcome_submitted, emit_payout_claimed,
 };
-use storage::{InstanceKey, Outcome, SignedOutcome, TempKey};
+use storage::{set_dispute_window, InstanceKey, Outcome, SignedOutcome, TempKey};
 use verification::{build_message, verify_signature};
 
 // ─── Cross-contract helpers ────────────────────────────────────────────────────
@@ -104,6 +104,7 @@ impl OutcomeManager {
             .instance()
             .set(&InstanceKey::FeeCollector, &fee_collector);
         env.storage().instance().set(&InstanceKey::FeeBps, &fee_bps);
+        set_dispute_window(&env, dispute_window_secs);
     }
 
     // ── Admin Controls ─────────────────────────────────────────────────────────
