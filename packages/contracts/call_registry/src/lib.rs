@@ -74,6 +74,7 @@ impl CallRegistry {
             whitelisted_tokens: Map::new(&env),
             min_stake,
             metadata_version: 0,
+            paused: false,
         };
 
         set_config(&env, &config);
@@ -103,6 +104,7 @@ impl CallRegistry {
         creator.require_auth();
 
         let config = get_config(&env).ok_or(CallRegistryError::NotInitialized)?;
+        assert!(!config.paused, "Contract is paused");
         if stake_amount < config.min_stake || stake_amount <= 0 {
             return Err(CallRegistryError::InvalidStakeAmount);
         }
@@ -253,6 +255,7 @@ impl CallRegistry {
         }
 
         let config = get_config(&env).expect("not initialized");
+        assert!(!config.paused, "Contract is paused");
         if amount < config.min_stake {
             panic!("stake below minimum");
         }
@@ -323,6 +326,16 @@ impl CallRegistry {
         admin::set_min_stake(env, new_min_stake);
     }
 
+    /// Pause the contract (admin only).
+    pub fn pause(env: Env) {
+        admin::pause(env);
+    }
+
+    /// Unpause the contract (admin only).
+    pub fn unpause(env: Env) {
+        admin::unpause(env);
+    }
+
     /// Resolve a call with an outcome (outcome_manager only).
     /// # Errors
     /// * [`CallRegistryError::NotInitialized`] – contract not initialised.
@@ -336,6 +349,7 @@ impl CallRegistry {
         end_price: i128,
     ) -> Result<Call, CallRegistryError> {
         let config = get_config(&env).ok_or(CallRegistryError::NotInitialized)?;
+        assert!(!config.paused, "Contract is paused");
         config.outcome_manager.require_auth();
 
         let mut call = get_call(&env, call_id).ok_or(CallRegistryError::CallNotFound)?;
