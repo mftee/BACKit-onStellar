@@ -51,6 +51,8 @@ pub struct Call {
     pub settled: bool,
     /// Creation timestamp
     pub created_at: u64,
+    /// Whether the call has been cancelled by its creator
+    pub cancelled: bool,
 }
 
 /// Enum representing stake positions on a call

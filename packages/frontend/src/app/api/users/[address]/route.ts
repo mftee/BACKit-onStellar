@@ -114,14 +114,7 @@ export async function GET(
   const limit = parseInt(url.searchParams.get('limit') || '20')
   const page = parseInt(url.searchParams.get('page') || '1')
 
-  const userProfile = mockUsers[address]
-
-  if (!userProfile) {
-    return NextResponse.json(
-      { error: 'User not found' },
-      { status: 404 }
-    )
-  }
+  const userProfile = getUserProfile(address)
 
   // If type is specified, return paginated list of followers or following
   if (type === 'followers') {
@@ -160,8 +153,9 @@ export async function POST(
   const url = new URL(request.url)
   const action = url.pathname.split('/').pop()
 
+  const userProfile = getUserProfile(address)
+
   if (action === 'follow') {
-    const userProfile = mockUsers[address]
     if (userProfile) {
       userProfile.user.followers += 1
       userProfile.user.isFollowing = true
@@ -170,7 +164,6 @@ export async function POST(
   }
 
   if (action === 'unfollow') {
-    const userProfile = mockUsers[address]
     if (userProfile) {
       userProfile.user.followers -= 1
       userProfile.user.isFollowing = false
@@ -183,3 +176,4 @@ export async function POST(
     { status: 400 }
   )
 }
+

@@ -101,3 +101,11 @@ pub fn emit_admin_params_changed_u32(
         ),
     );
 }
+
+/// Emitted when a creator cancels their call and reclaims their stake
+pub fn emit_call_cancelled(env: &Env, call_id: u64, creator: &Address, refunded_amount: i128) {
+    env.events().publish(
+        ("call_registry", "call_cancelled"),
+        (call_id, creator.clone(), refunded_amount),
+    );
+}
