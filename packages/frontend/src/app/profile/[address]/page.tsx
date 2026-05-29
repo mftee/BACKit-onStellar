@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { StakeLedgerItem, UserStakesResponse, UserProfile } from '@/types'
+import { StakeLedgerItem, UserStakesResponse, UserProfile, User } from '@/types'
 import { useWalletContext } from '@/components/WalletContext'
 import ProfileHeader from '@/components/ProfileHeader'
 import ProfileHeaderSkeleton from '@/components/skeletons/ProfileHeaderSkeleton'
@@ -314,6 +314,12 @@ export default function StakesPage() {
   const [profileLoading, setProfileLoading] = useState(true)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [isEditingProfile, setIsEditingProfile] = useState(false)
+  const [followers, setFollowers] = useState<User[]>([])
+  const [following, setFollowing] = useState<User[]>([])
+  const [followersTotal, setFollowersTotal] = useState(0)
+  const [followingTotal, setFollowingTotal] = useState(0)
+  const [followersPage, setFollowersPage] = useState(1)
+  const [followingPage, setFollowingPage] = useState(1)
 
   // Stakes ledger states
   const [stakes, setStakes] = useState<StakeLedgerItem[]>([])
@@ -372,10 +378,92 @@ export default function StakesPage() {
     }
   }, [address])
 
+  const fetchFollowers = useCallback(async (p: number) => {
+    if (!address) return
+    try {
+      const params = new URLSearchParams({
+        type: 'followers',
+        page: String(p),
+        limit: String(PAGE_SIZE),
+      })
+      const res = await fetch(`/api/users/${address}?${params}`)
+      if (!res.ok) return
+
+      const data = (await res.json()) as {
+        data: User[]
+        total: number
+        page: number
+        limit: number
+      }
+
+      setFollowers((prev) => (p === 1 ? data.data : [...prev, ...data.data]))
+      setFollowersTotal(data.total)
+    } catch (err) {
+      console.error('Failed to load followers', err)
+    }
+  }, [address])
+
+  const fetchFollowing = useCallback(async (p: number) => {
+    if (!address) return
+    try {
+      const params = new URLSearchParams({
+        type: 'following',
+        page: String(p),
+        limit: String(PAGE_SIZE),
+      })
+      const res = await fetch(`/api/users/${address}?${params}`)
+      if (!res.ok) return
+
+      const data = (await res.json()) as {
+        data: User[]
+        total: number
+        page: number
+        limit: number
+      }
+
+      setFollowing((prev) => (p === 1 ? data.data : [...prev, ...data.data]))
+      setFollowingTotal(data.total)
+    } catch (err) {
+      console.error('Failed to load following', err)
+    }
+  }, [address])
+
+  const handleLoadMoreFollowers = async () => {
+    const nextPage = followersPage + 1
+    setFollowersPage(nextPage)
+    await fetchFollowers(nextPage)
+  }
+
+  const handleLoadMoreFollowing = async () => {
+    const nextPage = followingPage + 1
+    setFollowingPage(nextPage)
+    await fetchFollowing(nextPage)
+  }
+
+  const handleFollowToggle = async (targetAddress: string, isFollowing: boolean) => {
+    const action = isFollowing ? 'unfollow' : 'follow'
+    try {
+      const res = await fetch(`/api/users/${targetAddress}/${action}`, { method: 'POST' })
+      if (res.ok) {
+        await fetchFollowers(followersPage)
+        await fetchFollowing(followingPage)
+      }
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
   useEffect(() => {
     fetchProfile()
     fetchStakes(page)
   }, [fetchProfile, fetchStakes, page])
+
+  useEffect(() => {
+    setFollowersPage(1)
+    setFollowingPage(1)
+    fetchFollowers(1)
+    fetchFollowing(1)
+  }, [address, fetchFollowers, fetchFollowing])
 
   const handleFollow = async () => {
     if (!address) return
@@ -478,6 +566,13 @@ export default function StakesPage() {
               createdCalls={profile.createdCalls || []}
               participatedCalls={profile.participatedCalls || []}
               resolvedCalls={profile.resolvedCalls || []}
+              followers={followers}
+              following={following}
+              followersTotal={followersTotal}
+              followingTotal={followingTotal}
+              onLoadMoreFollowers={handleLoadMoreFollowers}
+              onLoadMoreFollowing={handleLoadMoreFollowing}
+              onFollowToggle={handleFollowToggle}
             />
           </>
         )}
@@ -606,4 +701,4 @@ export default function StakesPage() {
       )}
     </div>
   )
-}
+}

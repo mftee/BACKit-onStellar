@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getUserProfile } from '@/lib/mockDb'
 import { UserProfile, User } from '@/types'
 
 // Mock data for users
