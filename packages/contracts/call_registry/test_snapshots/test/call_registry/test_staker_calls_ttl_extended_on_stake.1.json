@@ -254,6 +254,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "cancelled"
+                      },
+                      "val": {
+                        "bool": false
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "condition"
                       },
                       "val": {
