@@ -95,6 +95,9 @@ importers:
       dotenv:
         specifier: ^17.2.3
         version: 17.4.2
+      helmet:
+        specifier: ^8.1.0
+        version: 8.2.0
       ioredis:
         specifier: ^5.7.0
         version: 5.11.0
@@ -6059,6 +6062,11 @@ packages:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
     dependencies:
       '@types/hast': 3.0.4
+    dev: false
+
+  /helmet@8.2.0:
+    resolution: {integrity: sha512-DRgTIUgnWcJ62KyarxxziuqYxKGnR6Rgg19BlbucN/dpmJbl1XOit6qvoOX0ZT+HhWe5OUVhU/a1zpGyc1xA0Q==}
+    engines: {node: '>=18.0.0'}
     dev: false
 
   /html-escaper@2.0.2:
