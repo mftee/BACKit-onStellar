@@ -44,6 +44,7 @@ pub enum InstanceKey {
     PendingOutcome(u64),     // stores Outcome after quorum, before finalization
     DisputeWindowStart(u64), // ledger timestamp when quorum was reached
     Version,
+    MaxSubmissionDelay,
 }
 
 
@@ -88,4 +89,17 @@ pub fn get_dispute_window(env: &Env) -> u64 {
         .instance()
         .get(&InstanceKey::DisputeWindow)
         .unwrap_or(3600)
+}
+
+pub fn set_max_submission_delay(env: &Env, delay: u64) {
+    env.storage()
+        .instance()
+        .set(&InstanceKey::MaxSubmissionDelay, &delay);
+}
+
+pub fn get_max_submission_delay(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&InstanceKey::MaxSubmissionDelay)
+        .unwrap_or(86400)
 }

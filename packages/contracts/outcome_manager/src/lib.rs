@@ -11,11 +11,14 @@ use soroban_sdk::{contract, contractimpl, Address, Bytes, BytesN, Env, IntoVal, 
 use auth::require_admin;
 use backit_shared::{is_valid_fee_bps, is_valid_outcome};
 use events::{
-    emit_batch_payout_started, emit_contract_upgraded, emit_fee_collected, emit_outcome_disputed,
-    emit_outcome_finalized, emit_outcome_submitted, emit_payout_claimed,
-    emit_price_observation_submitted,
+    emit_admin_params_changed, emit_batch_payout_started, emit_contract_upgraded,
+    emit_fee_collected, emit_outcome_disputed, emit_outcome_finalized, emit_outcome_submitted,
+    emit_payout_claimed, emit_price_observation_submitted,
 };
-use storage::{set_dispute_window, InstanceKey, Outcome, PriceObservation, SignedOutcome, TempKey};
+use storage::{
+    set_dispute_window, set_max_submission_delay, InstanceKey, Outcome, PriceObservation,
+    SignedOutcome, TempKey,
+};
 use verification::{build_message, verify_signature};
 
 pub const CONTRACT_VERSION: u32 = 1;
@@ -108,6 +111,7 @@ impl OutcomeManager {
             .set(&InstanceKey::FeeCollector, &fee_collector);
         env.storage().instance().set(&InstanceKey::FeeBps, &fee_bps);
         set_dispute_window(&env, dispute_window_secs);
+        set_max_submission_delay(&env, 86400);
         env.storage().instance().set(&InstanceKey::Version, &CONTRACT_VERSION);
     }
 
@@ -150,6 +154,16 @@ impl OutcomeManager {
             .set(&InstanceKey::Admin, &new_admin);
     }
 
+    pub fn set_max_submission_delay(env: Env, new_delay: u64) {
+        require_admin(&env);
+        set_max_submission_delay(&env, new_delay);
+        emit_admin_params_changed(&env, new_delay);
+    }
+
+    pub fn get_max_submission_delay(env: Env) -> u64 {
+        storage::get_max_submission_delay(&env)
+    }
+
     // ── Oracle Submission ──────────────────────────────────────────────────────
 
     /// Accept a signed outcome report from a trusted oracle.
@@ -164,7 +178,7 @@ impl OutcomeManager {
     /// - `duplicate submission`   – this oracle already voted on this call
     /// - `invalid outcome`        – outcome is not 1 (UP) or 2 (DOWN)
     /// - (ed25519_verify panics)  – signature is invalid; tx is reverted
-    pub fn submit_outcome(env: Env, registry: Address, signed: SignedOutcome) {
+    pub fn submit_outcome(env: Env, registry: Address, signed: SignedOutcome, call_end_ts: u64) {
         // 1. Validate oracle
         let oracles: Map<BytesN<32>, bool> =
             env.storage().instance().get(&InstanceKey::Oracles).unwrap();
@@ -190,6 +204,16 @@ impl OutcomeManager {
         // 4. Validate outcome range
         if !is_valid_outcome(signed.outcome) {
             panic!("invalid outcome: must be 1 (UP) or 2 (DOWN)");
+        }
+
+        // 4b. Enforce submission deadline: oracle timestamp must be within
+        //     call_end_ts + max_submission_delay to reject stale reports
+        let max_delay = storage::get_max_submission_delay(&env);
+        let deadline = call_end_ts
+            .checked_add(max_delay)
+            .expect("overflow in submission deadline");
+        if signed.timestamp > deadline {
+            panic!("submission outside allowed window");
         }
 
         // 5. Build canonical message and verify ed25519 signature
