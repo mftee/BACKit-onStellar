@@ -28,6 +28,12 @@ export class CallsService {
     return { data, total, page, limit };
   }
 
+  async getFollowingFeed(address: string, query: QueryCallsDto) {
+    const { page = 1, limit = 20 } = query;
+    const [data, total] = await this.callsRepository.findFeedByFollowing(address, page, limit);
+    return { data, total, page, limit };
+  }
+
   async search(query: QueryCallsDto) {
     const { search = '', page = 1, limit = 20 } = query;
     const [data, total] = await this.callsRepository.searchVisible(search, page, limit);

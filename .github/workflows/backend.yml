@@ -33,6 +33,9 @@ jobs:
       POSTGRES_USER: postgres
       POSTGRES_DB: backit_test
       REDIS_URL: redis://localhost:6379
+      DATABASE_URL: postgresql://postgres:password@localhost:5432/backit_test
+      NODE_ENV: test
+      PORT: '3000'
 
     services:
       postgres:
@@ -126,7 +129,11 @@ jobs:
           fi
           echo "Linting changed backend files:"
           echo "$CHANGED_BACKEND_TS_FILES"
-          pnpm --filter backend exec eslint --fix $CHANGED_BACKEND_TS_FILES
+          # When running eslint from the backend package, file paths must be relative to that package.
+          # Strip the leading packages/backend/ prefix so eslint sees the correct paths.
+          REL_FILES=$(echo "$CHANGED_BACKEND_TS_FILES" | sed -E 's#(^|\n)packages/backend/##g' | tr '\n' ' ')
+          echo "Relative files to lint: $REL_FILES"
+          pnpm --filter backend exec eslint --fix $REL_FILES
 
       - name: Build Backend
         if: steps.backend_changes.outputs.backend_relevant == 'true'
@@ -134,11 +141,6 @@ jobs:
 
       - name: Run Backend Startup Smoke Test
         if: steps.backend_changes.outputs.backend_relevant == 'true'
-        env:
-          DATABASE_URL: postgresql://postgres:password@localhost:5432/backit_test
-          REDIS_URL: redis://localhost:6379
-          NODE_ENV: test
-          PORT: 3000
         run: |
           set -euo pipefail
           pnpm --filter backend exec node dist/main.js &
@@ -158,18 +160,10 @@ jobs:
 
       - name: Run Backend E2E Tests
         if: steps.backend_changes.outputs.backend_relevant == 'true'
-        env:
-          DATABASE_URL: postgresql://postgres:password@localhost:5432/backit_test
-          REDIS_URL: redis://localhost:6379
-          NODE_ENV: test
         run: pnpm --filter backend test:e2e
 
       - name: Run Backend Tests with Coverage
         if: steps.backend_changes.outputs.backend_relevant == 'true'
-        env:
-          DATABASE_URL: postgresql://postgres:password@localhost:5432/backit_test
-          REDIS_URL: redis://localhost:6379
-          NODE_ENV: test
         run: pnpm --filter backend test:cov
 
       - name: Upload Test Coverage Artifacts

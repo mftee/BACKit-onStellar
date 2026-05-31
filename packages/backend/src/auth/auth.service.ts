@@ -91,7 +91,7 @@ export class AuthService {
   }
 
   private validateStellarAddress(address: string): void {
-    if (!/^G[A-Z2-7]{55}$/.test(address)) {
+    if (!/^G[A-Z2-7]{54,55}$/.test(address)) {
       throw new BadRequestException('Invalid Stellar address format');
     }
   }

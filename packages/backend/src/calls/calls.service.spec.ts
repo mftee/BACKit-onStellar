@@ -4,6 +4,7 @@ import { CallsService } from './calls.service';
 import { CallsRepository } from './calls.repository';
 import { CallReport } from './entities/call-report.entity';
 import { OracleService } from '../oracle/oracle.service';
+import { IpfsService } from '../storage/ipfs.service';
 
 describe('CallsService', () => {
   let service: CallsService;
@@ -14,6 +15,7 @@ describe('CallsService', () => {
 
   const callReportRepository = {};
   const oracleService = {};
+  const ipfsService = {};
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -23,6 +25,7 @@ describe('CallsService', () => {
         { provide: CallsRepository, useValue: callsRepository },
         { provide: getRepositoryToken(CallReport), useValue: callReportRepository },
         { provide: OracleService, useValue: oracleService },
+        { provide: IpfsService, useValue: ipfsService },
       ],
     }).compile();
 
