@@ -6,9 +6,10 @@ import ShareButton from "./ShareButton";
 interface Props {
   call: CallDetailData;
   timeLeft: string;
+  odds?: { yes: number; no: number } | null;
 }
 
-export default function CallDetailHeader({ call, timeLeft }: Props) {
+export default function CallDetailHeader({ call, timeLeft, odds }: Props) {
   // Extract target price from condition if available
   const targetPrice = call.conditionJson?.targetPrice || call.token.price * 1.5; // Fallback example
   
@@ -27,6 +28,11 @@ export default function CallDetailHeader({ call, timeLeft }: Props) {
             <p className="text-gray-300">
               Current: ${call.token.price.toLocaleString()}
             </p>
+            {odds && (
+              <p className="text-sm text-gray-400">
+                UP {odds.yes.toFixed(2)}x &nbsp;·&nbsp; DOWN {odds.no.toFixed(2)}x
+              </p>
+            )}
           </div>
         </div>
         <div className="text-right flex flex-col items-end gap-2">
