@@ -101,6 +101,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error) => {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   Logger.error(`Failed to start: ${error.message}`, error.stack, 'Bootstrap');
   process.exit(1);
 });

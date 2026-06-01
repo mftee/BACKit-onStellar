@@ -26,6 +26,7 @@ describe('CreateCallDto validation (endpoint: POST /calls)', () => {
   };
 
   it('rejects missing title', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { title: _, ...rest } = base;
     expect((await errors(CreateCallDto, rest)).some(e => e.property === 'title')).toBe(true);
   });

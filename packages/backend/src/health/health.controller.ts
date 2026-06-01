@@ -56,6 +56,7 @@ export class HealthController {
     },
   })
   async check() {
+    // eslint-disable-next-line @typescript-eslint/await-thenable
     const [database, stellar_rpc, memory_heap_mb] = await Promise.all([
       this.checkDatabase(),
       this.checkStellarRpc(),

@@ -78,6 +78,7 @@ export class IndexerService {
         await this.dispatchEvent(event);
       }
     } catch (err: any) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.error(`Indexer tick failed: ${err.message}`);
     }
   }
@@ -150,6 +151,7 @@ export class IndexerService {
     );
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private async handlePayoutClaimed(
     topics: xdr.ScVal[],
     txHash: string,
@@ -203,6 +205,7 @@ export class IndexerService {
         `PayoutClaimed synced: call=${callId} staker=${stakerAddress}`,
       );
     } catch (err: any) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
       this.logger.warn(`Failed to parse PayoutClaimed event: ${err.message}`);
     }
   }

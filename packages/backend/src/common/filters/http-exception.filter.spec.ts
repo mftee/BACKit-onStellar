@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 import { GlobalExceptionFilter } from './http-exception.filter';
 import { HttpException, HttpStatus, ArgumentsHost } from '@nestjs/common';
 import { QueryFailedError, EntityNotFoundError } from 'typeorm';

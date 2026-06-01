@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await */
 import { Retryable } from './retryable.decorator';
 
 jest.useFakeTimers();
