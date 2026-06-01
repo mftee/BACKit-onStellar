@@ -102,12 +102,10 @@ describe('OracleService', () => {
     rpcServer.simulateTransaction.mockResolvedValue({
       error: 'boom',
     });
-    const promise = service
-      .fetchOraclePrice('CID', 'BTC')
-      .then(
-        () => null,
-        (err) => err as Error,
-      );
+    const promise = service.fetchOraclePrice('CID', 'BTC').then(
+      () => null,
+      (err) => err as Error,
+    );
     await jest.advanceTimersByTimeAsync(7_000);
     const err = await promise;
     expect(err).toBeInstanceOf(Error);
@@ -127,12 +125,10 @@ describe('OracleService', () => {
     rpcServer.simulateTransaction.mockResolvedValueOnce({
       result: null,
     });
-    const promise = service
-      .fetchOraclePrice('CID', 'BTC')
-      .then(
-        () => null,
-        (err) => err as Error,
-      );
+    const promise = service.fetchOraclePrice('CID', 'BTC').then(
+      () => null,
+      (err) => err as Error,
+    );
     await jest.advanceTimersByTimeAsync(7_000);
     const err = await promise;
     expect(err).toBeInstanceOf(Error);
@@ -277,7 +273,9 @@ describe('OracleService', () => {
 
   it('getPendingCalls filters on processedAt/failedAt null', async () => {
     oracleCallRepo.find.mockResolvedValueOnce([{ id: 1 } as any]);
-    await expect(service.getPendingCalls()).resolves.toEqual([{ id: 1 } as any]);
+    await expect(service.getPendingCalls()).resolves.toEqual([
+      { id: 1 } as any,
+    ]);
     expect(oracleCallRepo.find).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.any(Object) }),
     );
@@ -285,7 +283,9 @@ describe('OracleService', () => {
 
   it('getOutcomesForCall includes relations', async () => {
     oracleOutcomeRepo.find.mockResolvedValueOnce([{ id: 9 } as any]);
-    await expect(service.getOutcomesForCall(1)).resolves.toEqual([{ id: 9 } as any]);
+    await expect(service.getOutcomesForCall(1)).resolves.toEqual([
+      { id: 9 } as any,
+    ]);
     expect(oracleOutcomeRepo.find).toHaveBeenCalledWith(
       expect.objectContaining({ relations: ['call'] }),
     );
@@ -297,7 +297,9 @@ describe('OracleService', () => {
       .mockResolvedValueOnce(1n)
       .mockResolvedValueOnce(2n);
 
-    await expect(service.fetchAllPrices('CID', ['BTC', 'ETH'])).resolves.toEqual({
+    await expect(
+      service.fetchAllPrices('CID', ['BTC', 'ETH']),
+    ).resolves.toEqual({
       BTC: 1n,
       ETH: 2n,
     });
@@ -306,9 +308,11 @@ describe('OracleService', () => {
 
   it('simulateContractRead proxies through retry wrapper', async () => {
     rpcServer.simulateTransaction.mockResolvedValueOnce({ ok: true });
-    await expect(service.simulateContractRead({} as any, 'x')).resolves.toEqual({
-      ok: true,
-    });
+    await expect(service.simulateContractRead({} as any, 'x')).resolves.toEqual(
+      {
+        ok: true,
+      },
+    );
     expect(rpcServer.simulateTransaction).toHaveBeenCalled();
   });
 

@@ -130,8 +130,7 @@ export class OracleService {
         );
       }
 
-      const result = (tx as SorobanRpc.Api.SimulateTransactionSuccessResponse)
-        .result;
+      const result = tx.result;
       if (!result) {
         throw new Error(
           `No result returned for oracle price of ${assetSymbol}`,

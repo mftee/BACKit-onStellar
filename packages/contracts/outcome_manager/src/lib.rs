@@ -308,6 +308,11 @@ impl OutcomeManager {
         total_winning_stake: i128,
         total_losing_stake: i128,
     ) {
+        // 0. Check if contract is paused (emergency guard)
+        if is_paused(&env) {
+            panic!("contract is paused");
+        }
+
         // 1. Require staker's authorization
         staker.require_auth();
 

@@ -165,7 +165,8 @@ export class IndexerService {
 
       const asU64 = (val?: xdr.ScVal): string | null => {
         if (!val) return null;
-        if (val.switch() === xdr.ScValType.scvU64()) return val.u64().toString();
+        if (val.switch() === xdr.ScValType.scvU64())
+          return val.u64().toString();
         return null;
       };
 
@@ -197,7 +198,9 @@ export class IndexerService {
         claimedAmount: String(amount ?? '0'),
         collectedAt: new Date(),
       });
-      this.logger.log(`PayoutClaimed synced: call=${callId} staker=${stakerAddress}`);
+      this.logger.log(
+        `PayoutClaimed synced: call=${callId} staker=${stakerAddress}`,
+      );
     } catch (err: any) {
       this.logger.warn(`Failed to parse PayoutClaimed event: ${err.message}`);
     }

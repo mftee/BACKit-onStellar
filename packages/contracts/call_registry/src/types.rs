@@ -45,6 +45,8 @@ pub struct Call {
     pub condition: ConditionType,
     /// Whether the call has been settled
     pub settled: bool,
+    /// Whether the call has been voided by admin (triggers full refunds)
+    pub voided: bool,
     /// Creation timestamp
     pub created_at: u64,
     /// Whether the call has been cancelled by its creator
@@ -117,4 +119,28 @@ pub struct CallStats {
     pub total_stakes: u32,
     pub up_stake_count: u32,
     pub down_stake_count: u32,
+}
+
+/// Creator reputation statistics tracked on-chain
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct CreatorStats {
+    pub total_created: u32,
+    pub total_resolved: u32,
+    pub total_correct: u32,
+}
+
+/// Instance storage is capped at 64 KB. Warn when entry count exceeds this.
+pub const INSTANCE_ENTRY_WARNING_THRESHOLD: u32 = 500;
+
+/// Storage utilisation snapshot returned by `get_storage_stats`.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct StorageStats {
+    /// Total calls ever created (mirrors CallCounter).
+    pub call_count: u64,
+    /// Number of entries currently tracked in instance storage.
+    pub instance_entry_count: u32,
+    /// Rough byte estimate for instance storage (entry_count × 128 bytes).
+    pub estimated_instance_bytes: u32,
 }

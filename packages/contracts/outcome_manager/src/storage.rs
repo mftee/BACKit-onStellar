@@ -43,6 +43,7 @@ pub enum InstanceKey {
     DisputeWindow,
     PendingOutcome(u64),     // stores Outcome after quorum, before finalization
     DisputeWindowStart(u64), // ledger timestamp when quorum was reached
+    Paused,                  // Emergency pause flag for rogue oracle detection
     Version,
     MaxSubmissionDelay,
 }

@@ -7,9 +7,10 @@ mod errors;
 mod events;
 mod storage;
 mod types;
-
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod fuzz_tests;
 
 use backit_shared::{is_valid_outcome, OUTCOME_DOWN, OUTCOME_UP};
 use errors::CallRegistryError;
@@ -82,6 +83,8 @@ impl CallRegistry {
         env.storage()
             .instance()
             .set(&Symbol::new(&env, "version"), &CONTRACT_VERSION);
+        // Track the 'version' instance key (Config key tracked inside set_config)
+        inc_instance_entry_count(&env, 1);
         extend_storage_ttl(&env);
 
         env.events()
@@ -144,6 +147,7 @@ impl CallRegistry {
             end_price: 0,
             condition,
             settled: false,
+            voided: false,
             created_at: current_timestamp,
             cancelled: false,
             metadata_version: 0,
@@ -151,6 +155,12 @@ impl CallRegistry {
 
         set_call(&env, &call);
         record_call_created(&env);
+        
+        // Track creator reputation: increment total_created
+        let mut creator_stats = get_creator_stats(&env, &creator);
+        creator_stats.total_created += 1;
+        set_creator_stats(&env, &creator, &creator_stats);
+        
         extend_storage_ttl(&env);
 
         emit_call_created(
@@ -277,6 +287,10 @@ impl CallRegistry {
             panic!("Call has been cancelled");
         }
 
+        if call.voided {
+            panic!("Call has been voided");
+        }
+
         let stake_position =
             StakePosition::from_u32(position).ok_or(CallRegistryError::InvalidPosition)?;
 
@@ -292,21 +306,21 @@ impl CallRegistry {
 
         match stake_position {
             StakePosition::Up => {
-            let new_stake = current_stake + amount;
-            if current_stake == 0 {
-                set_up_staker_count(&env, call_id, get_up_staker_count(&env, call_id) + 1);
+                let new_stake = current_stake + amount;
+                if current_stake == 0 {
+                    set_up_staker_count(&env, call_id, get_up_staker_count(&env, call_id) + 1);
+                }
+                set_user_stake(&env, call_id, &staker, position, new_stake);
+                call.total_up_stake += amount;
             }
-            set_user_stake(&env, call_id, &staker, position, new_stake);
-            call.total_up_stake += amount;
-        }
-        StakePosition::Down => {
-            let new_stake = current_stake + amount;
-            if current_stake == 0 {
-                set_down_staker_count(&env, call_id, get_down_staker_count(&env, call_id) + 1);
+            StakePosition::Down => {
+                let new_stake = current_stake + amount;
+                if current_stake == 0 {
+                    set_down_staker_count(&env, call_id, get_down_staker_count(&env, call_id) + 1);
+                }
+                set_user_stake(&env, call_id, &staker, position, new_stake);
+                call.total_down_stake += amount;
             }
-            set_user_stake(&env, call_id, &staker, position, new_stake);
-            call.total_down_stake += amount;
-        }
         }
 
         set_call(&env, &call);
@@ -366,8 +380,29 @@ impl CallRegistry {
             return Err(CallRegistryError::CallNotEnded);
         }
 
+        if call.voided {
+            panic!("Call has been voided");
+        }
+
         call.outcome = outcome;
         call.end_price = end_price;
+
+        // Track creator reputation: increment total_resolved and conditionally total_correct
+        let mut creator_stats = get_creator_stats(&env, &call.creator);
+        creator_stats.total_resolved += 1;
+        
+        // Check if creator staked on the winning position
+        let creator_winning_stake = match outcome {
+            OUTCOME_UP => get_user_stake(&env, call.id, &call.creator, 1),
+            OUTCOME_DOWN => get_user_stake(&env, call.id, &call.creator, 2),
+            _ => 0,
+        };
+        
+        if creator_winning_stake > 0 {
+            creator_stats.total_correct += 1;
+        }
+        
+        set_creator_stats(&env, &call.creator, &creator_stats);
 
         set_call(&env, &call);
         extend_storage_ttl(&env);
@@ -562,6 +597,11 @@ impl CallRegistry {
         })
     }
 
+    /// Get creator reputation statistics
+    pub fn get_creator_stats_view(env: Env, creator: Address) -> CreatorStats {
+        get_creator_stats(&env, &creator)
+    }
+
     /// Get all calls a staker has participated in.
     pub fn get_staker_calls(env: Env, staker: Address) -> Vec<Call> {
         let call_ids = get_staker_calls(&env, &staker);
@@ -606,6 +646,21 @@ impl CallRegistry {
         storage::get_global_stats(&env)
     }
 
+    /// Return the number of entries currently tracked in instance storage.
+    pub fn get_instance_entry_count(env: Env) -> u32 {
+        storage::get_instance_entry_count(&env)
+    }
+
+    /// Return a storage utilisation snapshot.
+    /// Emits `StorageWarning` if instance entries exceed the threshold.
+    pub fn get_storage_stats(env: Env) -> StorageStats {
+        let stats = storage::get_storage_stats(&env);
+        if stats.instance_entry_count >= INSTANCE_ENTRY_WARNING_THRESHOLD {
+            events::emit_storage_warning(&env, stats.instance_entry_count, stats.estimated_instance_bytes);
+        }
+        stats
+    }
+
     /// Return the current contract version.
     pub fn version(env: Env) -> u32 {
         env.storage()
@@ -638,5 +693,62 @@ impl CallRegistry {
         emit_contract_upgraded(&env, old_version, new_version, &config.admin);
 
         Ok(())
+    }
+
+    /// Void a call (admin only). Can be called at any time.
+    /// Once voided, no new stakes or resolutions are accepted.
+    /// Emits CallVoided.
+    pub fn void_call(env: Env, call_id: u64) {
+        let config = get_config(&env).expect("Not initialized");
+        config.admin.require_auth();
+
+        let mut call = get_call(&env, call_id).expect("Call not found");
+
+        if call.voided {
+            panic!("Call already voided");
+        }
+
+        if call.settled {
+            panic!("Call already settled");
+        }
+
+        call.voided = true;
+        set_call(&env, &call);
+        extend_storage_ttl(&env);
+
+        emit_call_voided(&env, call_id, &config.admin);
+    }
+
+    /// Claim a full refund for a voided call.
+    /// Refunds the exact stake the caller placed (up + down combined).
+    /// Emits VoidRefundClaimed.
+    pub fn claim_void_refund(env: Env, staker: Address, call_id: u64) {
+        staker.require_auth();
+
+        let call = get_call(&env, call_id).expect("Call not found");
+
+        if !call.voided {
+            panic!("Call is not voided");
+        }
+
+        if is_void_refund_claimed(&env, call_id, &staker) {
+            panic!("Refund already claimed");
+        }
+
+        let up_stake = get_user_stake(&env, call_id, &staker, 1);
+        let down_stake = get_user_stake(&env, call_id, &staker, 2);
+        let total_refund = up_stake + down_stake;
+
+        if total_refund <= 0 {
+            panic!("No stake to refund");
+        }
+
+        set_void_refund_claimed(&env, call_id, &staker);
+        extend_storage_ttl(&env);
+
+        let token_client = token::Client::new(&env, &call.stake_token);
+        token_client.transfer(&env.current_contract_address(), &staker, &total_refund);
+
+        emit_void_refund_claimed(&env, call_id, &staker, total_refund);
     }
 }

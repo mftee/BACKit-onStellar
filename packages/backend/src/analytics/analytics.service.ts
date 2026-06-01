@@ -504,7 +504,10 @@ export class AnalyticsService {
     let prevWeekTime = 0;
     for (const week of weeks) {
       const currentTime = week.getTime();
-      if (prevWeekTime && currentTime - prevWeekTime === 7 * 24 * 60 * 60 * 1000) {
+      if (
+        prevWeekTime &&
+        currentTime - prevWeekTime === 7 * 24 * 60 * 60 * 1000
+      ) {
         currentStreak += 1;
       } else {
         currentStreak = 1;
@@ -546,7 +549,9 @@ export class AnalyticsService {
       .createQueryBuilder('stake')
       .innerJoinAndSelect('stake.call', 'call')
       .where('stake.userAddress = :userAddress', { userAddress })
-      .andWhere('call.status IN (:...statuses)', { statuses: ['OPEN', 'SETTLING'] })
+      .andWhere('call.status IN (:...statuses)', {
+        statuses: ['OPEN', 'SETTLING'],
+      })
       .getMany();
 
     if (!stakes.length) {
@@ -560,24 +565,30 @@ export class AnalyticsService {
 
     // Get all active tokens to map addresses to symbols
     const tokens = await this.tokensService.getAll();
-    const tokenMap = new Map(tokens.map(t => [t.assetIssuer || t.assetCode, t.assetCode]));
+    const tokenMap = new Map(
+      tokens.map((t) => [t.assetIssuer || t.assetCode, t.assetCode]),
+    );
 
     // Identify unique symbols needed for price lookup
     const symbolsToFetch = new Set<string>();
-    stakes.forEach(stake => {
+    stakes.forEach((stake) => {
       const stakeToken = stake.call.stakeToken;
       const symbol = stakeToken ? tokenMap.get(stakeToken) || 'XLM' : 'XLM'; // fallback
       symbolsToFetch.add(symbol);
     });
 
     // Fetch prices in USD
-    const prices = await this.coinGeckoService.getPrices(Array.from(symbolsToFetch));
+    const prices = await this.coinGeckoService.getPrices(
+      Array.from(symbolsToFetch),
+    );
 
     let totalLocked = 0;
-    const breakdown = stakes.map(stake => {
+    const breakdown = stakes.map((stake) => {
       const call = stake.call;
       const stakeToken = call.stakeToken;
-      const tokenSymbol = stakeToken ? tokenMap.get(stakeToken) || 'XLM' : 'XLM';
+      const tokenSymbol = stakeToken
+        ? tokenMap.get(stakeToken) || 'XLM'
+        : 'XLM';
       const usdPrice = prices.get(tokenSymbol) || 0; // Default to 0 if price missing
 
       const amount = Number(stake.amount);

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
@@ -10,6 +11,7 @@ import { OracleModule } from '../oracle/oracle.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Call, Stake]),
+    CacheModule.register(),
     TokensModule,
     OracleModule,
   ],
