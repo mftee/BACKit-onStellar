@@ -2,8 +2,13 @@
 
 use soroban_sdk::{
     contract, contractimpl,
+<<<<<<< HEAD
     testutils::{Address as _, Events as _, Ledger as _, MockAuth, MockAuthInvoke},
     vec, Address, Bytes, BytesN, Env, IntoVal, Symbol,
+=======
+    testutils::{Address as _, Events as _, Ledger as _},
+    Address, Bytes, BytesN, Env, IntoVal, Symbol,
+>>>>>>> be0279c (fix: implement pause/unpause and fix compile errors)
 };
 
 use crate::errors::CallRegistryError;

@@ -55,6 +55,15 @@ fn registry_mark_settled(env: &Env, registry: &Address, call_id: u64) {
     env.invoke_contract::<()>(registry, &Symbol::new(env, "mark_settled"), args);
 }
 
+// ─── Pause helper ─────────────────────────────────────────────────────────────
+
+fn is_paused(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&InstanceKey::Paused)
+        .unwrap_or(false)
+}
+
 // ─── Contract ─────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -164,6 +173,22 @@ impl OutcomeManager {
         storage::get_max_submission_delay(&env)
     }
 
+    // ── Emergency Pause ────────────────────────────────────────────────────────
+
+    pub fn pause(env: Env) {
+        require_admin(&env);
+        env.storage().instance().set(&InstanceKey::Paused, &true);
+    }
+
+    pub fn unpause(env: Env) {
+        require_admin(&env);
+        env.storage().instance().set(&InstanceKey::Paused, &false);
+    }
+
+    pub fn is_paused_view(env: Env) -> bool {
+        is_paused(&env)
+    }
+
     // ── Oracle Submission ──────────────────────────────────────────────────────
 
     /// Accept a signed outcome report from a trusted oracle.
@@ -179,6 +204,10 @@ impl OutcomeManager {
     /// - `invalid outcome`        – outcome is not 1 (UP) or 2 (DOWN)
     /// - (ed25519_verify panics)  – signature is invalid; tx is reverted
     pub fn submit_outcome(env: Env, registry: Address, signed: SignedOutcome, call_end_ts: u64) {
+        if is_paused(&env) {
+            panic!("contract is paused");
+        }
+
         // 1. Validate oracle
         let oracles: Map<BytesN<32>, bool> =
             env.storage().instance().get(&InstanceKey::Oracles).unwrap();

@@ -848,6 +848,64 @@ fn test_fuzz_zero_total_winning_panics() {
     fuzz_claim_setup(1, 0, 1, 0);
 }
 
+// ─── Pause Mechanism Tests ─────────────────────────────────────────────────────
+
+#[test]
+fn test_pause_and_unpause() {
+    let env = Env::default();
+    let (_admin, _registry_id, _oracle_secret, _oracle_pubkey, client) = setup_single_oracle(&env);
+
+    assert!(!client.is_paused_view());
+
+    env.mock_all_auths();
+    client.pause();
+    assert!(client.is_paused_view());
+
+    client.unpause();
+    assert!(!client.is_paused_view());
+}
+
+#[test]
+#[should_panic(expected = "contract is paused")]
+fn test_submit_outcome_fails_when_paused() {
+    let env = Env::default();
+    let (_admin, registry_id, oracle_secret, oracle_pubkey, client) = setup_single_oracle(&env);
+
+    env.mock_all_auths();
+    client.pause();
+
+    let signed = SignedOutcome {
+        call_id: 1,
+        outcome: 1,
+        price: 100,
+        timestamp: 1000,
+        oracle_pubkey: oracle_pubkey.clone(),
+        signature: sign_outcome(&env, &oracle_secret, 1, 1, 100, 1000),
+    };
+
+    client.submit_outcome(&registry_id, &signed, &0u64);
+}
+
+#[test]
+#[should_panic(expected = "contract is paused")]
+fn test_claim_payout_fails_when_paused() {
+    let env = Env::default();
+    let (_admin, registry_id, _oracle_secret, _oracle_pubkey, client) = setup_single_oracle(&env);
+    let staker = Address::generate(&env);
+
+    env.mock_all_auths();
+    client.pause();
+
+    client.claim_payout(
+        &registry_id,
+        &1u64,
+        &staker,
+        &100_i128,
+        &100_i128,
+        &100_i128,
+    );
+}
+
 // ─── Oracle Submission Deadline Tests ─────────────────────────────────────────
 
 #[test]
