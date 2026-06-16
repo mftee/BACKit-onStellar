@@ -228,6 +228,77 @@ pub fn emit_storage_warning(env: &Env, entry_count: u32, estimated_bytes: u32) {
     );
 }
 
+// ── Native XLM events ─────────────────────────────────────────────────────────
+
+/// Emitted when a new call is created using native XLM as the stake token.
+/// Distinct from `call_created` so indexers can separately tally XLM volume.
+pub fn emit_xlm_call_created(
+    env: &Env,
+    call_id: u64,
+    creator: &Address,
+    stake_amount: i128,
+    start_price: i128,
+    end_ts: u64,
+    token_address: &Address,
+    pair_id: &Bytes,
+    ipfs_cid: &Bytes,
+    outcome_count: u32,
+) {
+    env.events().publish(
+        ("call_registry", "xlm_call_created"),
+        (
+            call_id,
+            creator.clone(),
+            stake_amount,
+            start_price,
+            end_ts,
+            token_address.clone(),
+            pair_id.clone(),
+            ipfs_cid.clone(),
+            outcome_count,
+        ),
+    );
+}
+
+/// Emitted when a staker adds native XLM stake to a call.
+/// Distinct from `stake_added` so indexers can separately tally XLM volume.
+pub fn emit_xlm_stake_added(
+    env: &Env,
+    call_id: u64,
+    staker: &Address,
+    amount: i128,
+    position: u32,
+) {
+    env.events().publish(
+        ("call_registry", "xlm_stake_added"),
+        (call_id, staker.clone(), amount, position),
+    );
+}
+
+/// Emitted when a void refund is paid out in native XLM.
+pub fn emit_xlm_void_refund_claimed(env: &Env, call_id: u64, staker: &Address, amount: i128) {
+    env.events().publish(
+        ("call_registry", "xlm_void_refund"),
+        (call_id, staker.clone(), amount),
+    );
+}
+
+/// Emitted when a call cancelled refund is paid out in native XLM.
+pub fn emit_xlm_call_cancelled(env: &Env, call_id: u64, creator: &Address, refunded_amount: i128) {
+    env.events().publish(
+        ("call_registry", "xlm_call_cancelled"),
+        (call_id, creator.clone(), refunded_amount),
+    );
+}
+
+/// Emitted when escrow payout is made in native XLM.
+pub fn emit_xlm_escrow_released(env: &Env, call_id: u64, to: &Address, amount: i128) {
+    env.events().publish(
+        ("call_registry", "xlm_escrow_released"),
+        (call_id, to.clone(), amount),
+    );
+}
+
 pub fn emit_shares_minted(env: &Env, call_id: u64, staker: &Address, outcome: u32, amount: i128) {
     env.events().publish(
         ("call_registry", "SharesMinted"),
