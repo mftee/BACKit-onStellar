@@ -70,6 +70,7 @@ pub struct Call {
     /// Whether the call has been cancelled by its creator
     pub cancelled: bool,
     pub metadata_version: u32,
+    /// Map of outcome indices to the deployed share token contract addresses
     pub share_tokens: Map<u32, Address>,
 }
 
@@ -121,6 +122,7 @@ pub struct ContractConfig {
     /// Number of seconds before `end_ts` during which staking is no longer
     /// accepted. Default: 300 (5 minutes). Set to 0 to disable the buffer.
     pub staking_cutoff_secs: u64,
+    /// Wasm hash for the share token contract (if enabled)
     pub share_wasm_hash: Option<BytesN<32>>,
 }
 

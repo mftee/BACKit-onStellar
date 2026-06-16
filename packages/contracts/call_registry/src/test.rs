@@ -2082,10 +2082,10 @@ mod native_xlm {
     /// single-arg form) gives us a proper SAC we can mint from.
     // REPLACE register_xlm_sac entirely:
     fn register_xlm_sac(env: &Env) -> Address {
-        let token_admin = Address::from_str(
+        let token_admin = Address::from_string(&soroban_sdk::String::from_str(
             env,
             "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
-        );
+        ));
         env.register_stellar_asset_contract_v2(token_admin)
             .address()
     }

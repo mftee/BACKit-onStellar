@@ -17,10 +17,10 @@ pub const NATIVE_XLM_SENTINEL: [u8; 32] = [0u8; 32];
 #[cfg(not(test))]
 #[inline]
 fn is_native_xlm(env: &Env, addr: &Address) -> bool {
-    let sentinel = Address::from_str(
+    let sentinel = Address::from_string(&soroban_sdk::String::from_str(
         env,
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
-    );
+    ));
     *addr == sentinel
 }
 
@@ -1172,10 +1172,10 @@ impl CallRegistry {
                 return addr;
             }
         }
-        Address::from_str(
+        Address::from_string(&soroban_sdk::String::from_str(
             &env,
             "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
-        )
+        ))
     }
 
     /// Returns `true` when `addr` is the native XLM sentinel.
