@@ -50,6 +50,10 @@ pub fn emit_batch_payout_started(env: &Env, call_id: u64, staker_count: u32) {
     );
 }
 
+/// Emitted when the admin overrides a pending outcome during the dispute window.
+///
+/// `new_outcome` and `new_price` reflect the corrected values. The outcome
+/// still needs `finalize_outcome` to be called once the window closes.
 pub fn emit_outcome_disputed(env: &Env, call_id: u64, new_outcome: u32, new_price: i128) {
     env.events().publish(
         (symbol_short!("outcome"), symbol_short!("disputed")),
@@ -57,11 +61,16 @@ pub fn emit_outcome_disputed(env: &Env, call_id: u64, new_outcome: u32, new_pric
     );
 }
 
+/// Emitted when the admin pauses the contract.
+///
+/// While paused, `submit_outcome` and `claim_payout` revert with
+/// [`OutcomeError::ContractPaused`].
 pub fn emit_contract_paused(env: &Env) {
     env.events()
         .publish((symbol_short!("contract"), symbol_short!("paused")), ());
 }
 
+/// Emitted when the admin unpauses the contract, resuming normal operations.
 pub fn emit_contract_unpaused(env: &Env) {
     env.events()
         .publish((symbol_short!("contract"), symbol_short!("unpaused")), ());

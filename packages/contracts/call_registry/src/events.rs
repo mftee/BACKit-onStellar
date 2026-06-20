@@ -94,6 +94,9 @@ pub fn emit_admin_params_changed_address(
     );
 }
 
+/// Emitted when an admin-controlled `u32` parameter changes (e.g. `fee_bps`).
+///
+/// Use the `param` field to identify which setting changed.
 pub fn emit_admin_params_changed_u32(
     env: &Env,
     param: &str,
@@ -120,6 +123,10 @@ pub fn emit_call_cancelled(env: &Env, call_id: u64, creator: &Address, refunded_
     );
 }
 
+/// Emitted when an admin-controlled `i128` parameter changes (e.g. `min_stake`,
+/// `max_stake_per_user`).
+///
+/// Use the `param` field to identify which setting changed.
 pub fn emit_admin_params_changed_i128(
     env: &Env,
     param: &str,
@@ -138,6 +145,9 @@ pub fn emit_admin_params_changed_i128(
     );
 }
 
+/// Emitted when an admin-controlled `u64` parameter changes (e.g. `staking_cutoff_secs`).
+///
+/// Use the `param` field to identify which setting changed.
 pub fn emit_admin_params_changed_u64(
     env: &Env,
     param: &str,
@@ -155,11 +165,13 @@ pub fn emit_admin_params_changed_u64(
         ),
     );
 }
+/// Emitted when a SAC token is added to the stake-token whitelist.
 pub fn emit_token_whitelisted(env: &Env, token: &Address) {
     env.events()
         .publish(("call_registry", "token_whitelisted"), token.clone());
 }
 
+/// Emitted when a SAC token is removed from the stake-token whitelist.
 pub fn emit_token_delisted(env: &Env, token: &Address) {
     env.events()
         .publish(("call_registry", "token_delisted"), token.clone());
@@ -177,6 +189,10 @@ pub fn emit_contract_unpaused(env: &Env, admin: &Address) {
         .publish(("call_registry", "contract_unpaused"), admin.clone());
 }
 
+/// Emitted when a creator updates the metadata hash attached to their call.
+///
+/// Includes old and new hash values plus the new `metadata_version` counter
+/// so indexers can detect and skip duplicate updates.
 pub fn emit_call_metadata_updated(
     env: &Env,
     call_id: u64,

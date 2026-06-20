@@ -1,3 +1,35 @@
+//! # CallRegistry Contract
+//!
+//! The `call_registry` contract is the core escrow and prediction-market engine
+//! for BACKit on Stellar. It manages the full lifecycle of a *prediction call*:
+//!
+//! 1. **Creation** -- a user opens a call by specifying a token pair, condition,
+//!    stake amount, and deadline (`create_call`).
+//! 2. **Staking** -- other users stake tokens on one of N discrete outcomes
+//!    (`stake_on_call`). Native XLM and SAC-wrapped tokens are both supported.
+//! 3. **Resolution** -- the trusted `OutcomeManager` submits the winning outcome
+//!    and end price after the deadline (`resolve_call`).
+//! 4. **Settlement** -- winners claim their proportional share via share tokens
+//!    (`redeem_shares`) or the outcome manager releases escrow (`release_escrow`).
+//!
+//! ## Architecture
+//!
+//! | Module        | Responsibility                                         |
+//! |---------------|--------------------------------------------------------|
+//! | `lib.rs`      | Public contract entry-points (`#[contractimpl]`)       |
+//! | `types.rs`    | Shared data types (`Call`, `ContractConfig`, ...)      |
+//! | `storage.rs`  | Typed storage accessors                                |
+//! | `events.rs`   | Event-emission helpers                                 |
+//! | `admin.rs`    | Admin-gated parameter mutations                        |
+//! | `shares.rs`   | Share-token deploy / mint / burn helpers               |
+//! | `sep10.rs`    | SEP-10 JWT verification                                |
+//! | `duration.rs` | Duration / TTL utilities                               |
+//!
+//! ## Native XLM support
+//!
+//! Native XLM is identified by the all-zero 32-byte sentinel address
+//! (`CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4`).
+//! Pass this as `stake_token` in `create_call` or `stake_on_call` to stake XLM.
 #![no_std]
 #![allow(deprecated)]
 
@@ -402,6 +434,14 @@ impl CallRegistry {
         env.storage().persistent().get(&key)
     }
 
+    /// Update the metadata hash for an existing call (creator only).
+    ///
+    /// Can only be called while the call is still active (not settled, not
+    /// cancelled, and `end_ts` has not passed). Each successful update
+    /// increments `metadata_version`.
+    ///
+    /// # Errors
+    /// * [`CallRegistryError::CallNotFound`] -- `call_id` does not exist.
     pub fn update_call_metadata(
         env: Env,
         creator: Address,
@@ -454,14 +494,22 @@ impl CallRegistry {
         Ok(())
     }
 
+    /// Add a SAC token to the stake-token whitelist (admin only).
+    ///
+    /// Once whitelisted, the token may be used as `stake_token` in `create_call`.
+    /// Native XLM is always implicitly allowed and does not need whitelisting.
     pub fn whitelist_token(env: Env, token_address: Address) {
         admin::whitelist_token(env, token_address);
     }
 
+    /// Remove a SAC token from the stake-token whitelist (admin only).
+    ///
+    /// Existing calls that already use this token are unaffected.
     pub fn remove_token(env: Env, token_address: Address) {
         admin::remove_token(env, token_address);
     }
 
+    /// Return `true` if `token_address` is currently on the whitelist.
     pub fn is_token_whitelisted(env: Env, token_address: Address) -> bool {
         let config = get_config(&env).expect("not initialized");
         config
@@ -580,6 +628,15 @@ impl CallRegistry {
         Ok(call)
     }
 
+    /// Redeem winning share tokens for a proportional payout.
+    ///
+    /// Burns the redeemer's winning share-token balance and transfers the
+    /// corresponding fraction of the total stake pool back to the redeemer.
+    ///
+    /// **Payout formula:** `balance * total_all_stakes / total_winning_stakes`
+    ///
+    /// # Errors
+    /// * [`CallRegistryError::CallNotFound`] -- `call_id` does not exist.
     pub fn redeem_shares(
         env: Env,
         redeemer: Address,
@@ -643,6 +700,14 @@ impl CallRegistry {
         Ok(payout)
     }
 
+    /// Transfer outcome share tokens from one address to another.
+    ///
+    /// Allows secondary trading of outcome positions before a call is resolved.
+    ///
+    /// # Errors
+    /// * [`CallRegistryError::CallNotFound`]    -- `call_id` does not exist.
+    /// * [`CallRegistryError::InvalidPosition`] -- `outcome` outside [1, outcome_count].
+    /// * [`CallRegistryError::NotInitialized`]  -- share tokens not deployed.
     pub fn transfer_shares(
         env: Env,
         from: Address,
@@ -677,6 +742,9 @@ impl CallRegistry {
         admin::set_max_stake_per_user(env, new_max);
     }
 
+    /// Set the minimum stake required per staking action (admin only).
+    ///
+    /// Both `create_call` and `stake_on_call` enforce this floor.
     pub fn set_min_stake(env: Env, new_min_stake: i128) {
         admin::set_min_stake(env, new_min_stake);
     }

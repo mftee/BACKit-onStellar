@@ -1,13 +1,25 @@
 use soroban_sdk::{contracttype, Address, Bytes, BytesN, Map};
 
-/// Describes the condition used to determine whether a call resolves as UP.
+/// Describes the price-movement condition that determines the winning outcome.
+///
+/// All price values use 7 decimal places (e.g. `1_0000000` = 1.0).
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub enum ConditionType {
+    /// Resolves UP when the end price is strictly greater than `target`.
+    /// `target` is an absolute price with 7 decimals.
     TargetAbove(i128),
+    /// Resolves UP when the end price is strictly less than `target`.
+    /// `target` is an absolute price with 7 decimals.
     TargetBelow(i128),
+    /// Resolves UP when the end price has risen by at least `percent`% from
+    /// the start price. `percent` is a whole-number percentage (e.g. `5` = 5%).
     PercentUp(u32),
+    /// Resolves UP when the end price has fallen by at least `percent`% from
+    /// the start price. `percent` is a whole-number percentage (e.g. `5` = 5%).
     PercentDown(u32),
+    /// Resolves UP when the end price falls within `[min, max]` inclusive.
+    /// Both `min` and `max` are absolute prices with 7 decimals.
     Range(i128, i128),
 }
 
@@ -69,6 +81,7 @@ pub struct Call {
     pub created_at: u64,
     /// Whether the call has been cancelled by its creator
     pub cancelled: bool,
+    /// Version counter incremented on each `update_call_metadata` call.
     pub metadata_version: u32,
     /// Map of outcome indices to the deployed share token contract addresses
     pub share_tokens: Map<u32, Address>,
@@ -114,8 +127,12 @@ pub struct ContractConfig {
     /// Maximum stake any single user may place per call per position.
     /// `0` means unlimited.
     pub max_stake_per_user: i128,
+    /// Set of SAC token addresses approved for use as stake tokens.
     pub whitelisted_tokens: Map<Address, bool>,
+    /// Minimum stake required for `create_call` and `stake_on_call`.
+    /// Denominated in the smallest unit of the stake token (stroops for XLM).
     pub min_stake: i128,
+    /// Reserved version field for future metadata schema migrations.
     pub metadata_version: u32,
     /// When true, create/stake/resolve operations are blocked.
     pub paused: bool,
@@ -130,8 +147,11 @@ pub struct ContractConfig {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct GlobalStats {
+    /// Total number of calls ever created (never decrements).
     pub total_calls: u64,
+    /// Cumulative stake volume across all calls, in the token's smallest unit.
     pub total_stake_volume: i128,
+    /// Number of unique staker addresses that have ever staked on any call.
     pub total_unique_stakers: u64,
 }
 
@@ -151,8 +171,11 @@ pub struct CallStats {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreatorStats {
+    /// Total number of calls this address has ever created.
     pub total_created: u32,
+    /// Total number of calls created by this address that have been resolved.
     pub total_resolved: u32,
+    /// Number of resolved calls where the creator staked on the winning outcome.
     pub total_correct: u32,
 }
 

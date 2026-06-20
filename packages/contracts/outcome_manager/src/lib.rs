@@ -1,3 +1,30 @@
+//! # OutcomeManager Contract
+//!
+//! The `outcome_manager` contract is the decentralized oracle layer for BACKit
+//! on Stellar. It collects signed outcome reports from a set of trusted oracle
+//! nodes and, once a configurable quorum agrees, finalizes the result and
+//! triggers settlement in the `CallRegistry` via cross-contract calls.
+//!
+//! ## Oracle submission flow
+//!
+//! 1. After a call's `end_ts` passes, each trusted oracle signs a canonical
+//!    message and calls `submit_outcome`.
+//! 2. The contract verifies the signature, deduplicates votes, and tallies.
+//! 3. When `quorum` matching votes are received the outcome enters a pending
+//!    state behind a configurable dispute window.
+//! 4. After the window elapses, anyone may call `finalize_outcome` to
+//!    permanently record the result and trigger `resolve_call` on the registry.
+//!
+//! ## Architecture
+//!
+//! | Module            | Responsibility                                      |
+//! |-------------------|-----------------------------------------------------|
+//! | `lib.rs`          | Public contract entry-points (`#[contractimpl]`)    |
+//! | `storage.rs`      | Typed storage keys and accessors                    |
+//! | `events.rs`       | Event-emission helpers                              |
+//! | `auth.rs`         | Admin authorization helper                          |
+//! | `verification.rs` | Ed25519 signature verification for oracle reports   |
+//! | `rotation.rs`     | Oracle-key rotation utilities                       |
 #![no_std]
 
 mod auth;
@@ -173,6 +200,10 @@ impl OutcomeManager {
 
     // ── Admin Controls ─────────────────────────────────────────────────────────
 
+    /// Add a new oracle public key to the trusted set (admin only).
+    ///
+    /// No-ops silently if `oracle` is already present. Panics with
+    /// [`OutcomeError::MaxOraclesReached`] if adding would exceed `MAX_ORACLES` (20).
     pub fn add_oracle(env: Env, oracle: BytesN<32>) {
         require_admin(&env);
         let mut oracles = get_oracles(&env);
@@ -198,6 +229,10 @@ impl OutcomeManager {
             .set(&InstanceKey::OracleList, &oracle_list);
     }
 
+    /// Remove an oracle public key from the trusted set (admin only).
+    ///
+    /// Past votes from the removed oracle are unaffected. No-ops if the
+    /// oracle is not currently in the set.
     pub fn remove_oracle(env: Env, oracle: BytesN<32>) {
         require_admin(&env);
         let mut oracles = get_oracles(&env);
@@ -222,6 +257,10 @@ impl OutcomeManager {
             .set(&InstanceKey::OracleList, &filtered);
     }
 
+    /// Update the quorum threshold (admin only).
+    ///
+    /// `quorum` must be at least 1 and must not exceed the current oracle
+    /// count. Panics with [`OutcomeError::InvalidQuorum`] otherwise.
     pub fn set_quorum(env: Env, quorum: u32) {
         require_admin(&env);
         let oracles = get_oracles(&env);
@@ -231,6 +270,9 @@ impl OutcomeManager {
         env.storage().instance().set(&InstanceKey::Quorum, &quorum);
     }
 
+    /// Transfer admin privileges to a new address (admin only).
+    ///
+    /// The new admin takes effect immediately with no confirmation step.
     pub fn set_admin(env: Env, new_admin: Address) {
         require_admin(&env);
         env.storage()
@@ -238,28 +280,38 @@ impl OutcomeManager {
             .set(&InstanceKey::Admin, &new_admin);
     }
 
+    /// Set the maximum seconds an oracle report may lag behind `call_end_ts`
+    /// (admin only). Reports submitted after this window are rejected with
+    /// [`OutcomeError::SubmissionWindowExpired`]. Default: 86400 (24 h).
     pub fn set_max_submission_delay(env: Env, new_delay: u64) {
         require_admin(&env);
         set_max_submission_delay(&env, new_delay);
         emit_admin_params_changed(&env, new_delay);
     }
 
+    /// Return the current maximum oracle submission delay in seconds.
     pub fn get_max_submission_delay(env: Env) -> u64 {
         storage::get_max_submission_delay(&env)
     }
 
     // ── Emergency Pause ────────────────────────────────────────────────────────
 
+    /// Pause the contract (admin only).
+    ///
+    /// While paused, `submit_outcome` and `claim_payout` revert with
+    /// [`OutcomeError::ContractPaused`].
     pub fn pause(env: Env) {
         require_admin(&env);
         env.storage().instance().set(&InstanceKey::Paused, &true);
     }
 
+    /// Unpause the contract (admin only), resuming normal operations.
     pub fn unpause(env: Env) {
         require_admin(&env);
         env.storage().instance().set(&InstanceKey::Paused, &false);
     }
 
+    /// Return `true` if the contract is currently paused.
     pub fn is_paused_view(env: Env) -> bool {
         is_paused(&env)
     }
@@ -509,6 +561,15 @@ impl OutcomeManager {
         emit_payout_claimed(&env, call_id, &staker, payout);
     }
 
+    /// Promote a pending outcome to finalized once the dispute window has elapsed.
+    ///
+    /// Anyone may call this after `dispute_window_secs` have passed since the
+    /// outcome entered the pending state. On success it calls `resolve_call`
+    /// on the registry and emits `OutcomeFinalized`.
+    ///
+    /// # Panics
+    /// - [`OutcomeError::CallNotFinalized`] -- no pending outcome, or the
+    ///   dispute window has not yet elapsed.
     pub fn finalize_outcome(env: Env, call_id: u64) {
         let pending: Outcome = match env
             .storage()
@@ -547,6 +608,16 @@ impl OutcomeManager {
         emit_outcome_finalized(&env, call_id, pending.outcome, pending.price);
     }
 
+    /// Override a pending outcome during the dispute window (admin only).
+    ///
+    /// Must be called before `window_start + dispute_window_secs` elapses.
+    /// The corrected outcome still needs `finalize_outcome` once the window
+    /// closes. Emits `OutcomeDisputed`.
+    ///
+    /// # Panics
+    /// - [`OutcomeError::CallNotFinalized`]     -- no pending outcome exists.
+    /// - [`OutcomeError::DisputeWindowExpired`] -- dispute window already closed.
+    /// - [`OutcomeError::InvalidOutcome`]       -- `new_outcome` is not valid.
     pub fn dispute_outcome(env: Env, call_id: u64, new_outcome: u32, new_price: i128) {
         require_admin(&env);
 
