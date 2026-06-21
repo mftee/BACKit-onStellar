@@ -222,13 +222,7 @@ pub fn emit_contract_upgraded(env: &Env, old_version: u32, new_version: u32, adm
 }
 
 /// Emitted when share tokens are minted
-pub fn emit_shares_minted(
-    env: &Env,
-    call_id: u64,
-    staker: &Address,
-    outcome: u32,
-    amount: i128,
-) {
+pub fn emit_shares_minted(env: &Env, call_id: u64, staker: &Address, outcome: u32, amount: i128) {
     env.events().publish(
         ("call_registry", "shares_minted"),
         (call_id, staker.clone(), outcome, amount),
@@ -236,13 +230,7 @@ pub fn emit_shares_minted(
 }
 
 /// Emitted when share tokens are redeemed
-pub fn emit_shares_redeemed(
-    env: &Env,
-    call_id: u64,
-    staker: &Address,
-    outcome: u32,
-    amount: i128,
-) {
+pub fn emit_shares_redeemed(env: &Env, call_id: u64, staker: &Address, outcome: u32, amount: i128) {
     env.events().publish(
         ("call_registry", "shares_redeemed"),
         (call_id, staker.clone(), outcome, amount),

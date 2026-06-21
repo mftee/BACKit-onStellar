@@ -130,6 +130,60 @@ fn get_registry(env: &Env) -> Address {
     }
 }
 
+fn require_call_settled(env: &Env, call_id: u64) {
+    if !env
+        .storage()
+        .instance()
+        .has(&InstanceKey::FinalOutcome(call_id))
+    {
+        soroban_sdk::panic_with_error!(env, OutcomeError::CallNotSettled);
+    }
+}
+
+fn get_fee_config(env: &Env) -> (u32, Address) {
+    let fee_bps: u32 = env
+        .storage()
+        .instance()
+        .get(&InstanceKey::FeeBps)
+        .unwrap_or(0);
+    let fee_collector = get_fee_collector(env);
+    (fee_bps, fee_collector)
+}
+
+fn compute_total_fee(env: &Env, total_losing_stake: i128, fee_bps: u32) -> i128 {
+    total_losing_stake
+        .checked_mul(fee_bps as i128)
+        .unwrap_or_else(|| overflow(env))
+        .checked_div(10000)
+        .unwrap_or_else(|| overflow(env))
+}
+
+fn compute_payout_parts(
+    env: &Env,
+    staker_winning_stake: i128,
+    total_winning_stake: i128,
+    total_fee: i128,
+    net_losing: i128,
+) -> (i128, i128) {
+    let staker_fee_share = staker_winning_stake
+        .checked_mul(total_fee)
+        .unwrap_or_else(|| overflow(env))
+        .checked_div(total_winning_stake)
+        .unwrap_or_else(|| overflow(env));
+
+    let prize_share = staker_winning_stake
+        .checked_mul(net_losing)
+        .unwrap_or_else(|| overflow(env))
+        .checked_div(total_winning_stake)
+        .unwrap_or_else(|| overflow(env));
+
+    let payout = staker_winning_stake
+        .checked_add(prize_share)
+        .unwrap_or_else(|| overflow(env));
+
+    (staker_fee_share, payout)
+}
+
 // ─── Contract ─────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -486,13 +540,7 @@ impl OutcomeManager {
         staker.require_auth();
 
         // 2. Verify the call is settled
-        if !env
-            .storage()
-            .instance()
-            .has(&InstanceKey::FinalOutcome(call_id))
-        {
-            soroban_sdk::panic_with_error!(&env, OutcomeError::CallNotSettled);
-        }
+        require_call_settled(&env, call_id);
 
         // 3. Prevent double-claim
         let claimed_key = InstanceKey::Claimed(call_id, staker.clone());
@@ -510,41 +558,23 @@ impl OutcomeManager {
 
         // 5. Compute protocol fee from losing pool (only on first claim; fee is
         //    proportional so each claimant effectively pays their share)
-        let fee_bps: u32 = env
-            .storage()
-            .instance()
-            .get(&InstanceKey::FeeBps)
-            .unwrap_or(0);
-        let fee_collector = get_fee_collector(&env);
+        let (fee_bps, fee_collector) = get_fee_config(&env);
 
         // Staker's proportional share of the total fee
-        let total_fee = (total_losing_stake as i128)
-            .checked_mul(fee_bps as i128)
-            .unwrap_or_else(|| overflow(&env))
-            .checked_div(10000)
-            .unwrap_or_else(|| overflow(&env));
-
-        let staker_fee_share = staker_winning_stake
-            .checked_mul(total_fee)
-            .unwrap_or_else(|| overflow(&env))
-            .checked_div(total_winning_stake)
-            .unwrap_or_else(|| overflow(&env));
+        let total_fee = compute_total_fee(&env, total_losing_stake, fee_bps);
 
         // 6. Net losing pool available to winners
         let net_losing = total_losing_stake
             .checked_sub(total_fee)
             .unwrap_or_else(|| overflow(&env));
 
-        // 7. Pro-rata payout from net losing pool
-        let prize_share = staker_winning_stake
-            .checked_mul(net_losing)
-            .unwrap_or_else(|| overflow(&env))
-            .checked_div(total_winning_stake)
-            .unwrap_or_else(|| overflow(&env));
-
-        let payout = staker_winning_stake
-            .checked_add(prize_share)
-            .unwrap_or_else(|| overflow(&env));
+        let (staker_fee_share, payout) = compute_payout_parts(
+            &env,
+            staker_winning_stake,
+            total_winning_stake,
+            total_fee,
+            net_losing,
+        );
 
         // 8. Mark as claimed BEFORE external calls (reentrancy guard)
         env.storage().instance().set(&claimed_key, &true);
@@ -686,13 +716,7 @@ impl OutcomeManager {
         require_admin(&env);
 
         // 2. Verify the call is settled
-        if !env
-            .storage()
-            .instance()
-            .has(&InstanceKey::FinalOutcome(call_id))
-        {
-            soroban_sdk::panic_with_error!(&env, OutcomeError::CallNotSettled);
-        }
+        require_call_settled(&env, call_id);
 
         // 3. Reject empty batches
         if stakers.is_empty() {
@@ -710,19 +734,10 @@ impl OutcomeManager {
         }
 
         // 6. Load fee config once
-        let fee_bps: u32 = env
-            .storage()
-            .instance()
-            .get(&InstanceKey::FeeBps)
-            .unwrap_or(0);
-        let fee_collector = get_fee_collector(&env);
+        let (fee_bps, fee_collector) = get_fee_config(&env);
 
         // Pre-compute shared fee values
-        let total_fee = (total_losing_stake as i128)
-            .checked_mul(fee_bps as i128)
-            .unwrap_or_else(|| overflow(&env))
-            .checked_div(10000)
-            .unwrap_or_else(|| overflow(&env));
+        let total_fee = compute_total_fee(&env, total_losing_stake, fee_bps);
 
         let net_losing = total_losing_stake
             .checked_sub(total_fee)
@@ -731,6 +746,7 @@ impl OutcomeManager {
         emit_batch_payout_started(&env, call_id, stakers.len());
 
         // 7. Process each staker
+        let mut aggregated_fee_share = 0_i128;
         for i in 0..stakers.len() {
             let staker = stakers.get(i).unwrap();
             let staker_winning_stake = stakes.get(i).unwrap();
@@ -745,37 +761,36 @@ impl OutcomeManager {
                 soroban_sdk::panic_with_error!(&env, OutcomeError::AlreadyClaimed);
             }
 
-            // Staker's proportional fee share
-            let staker_fee_share = staker_winning_stake
-                .checked_mul(total_fee)
-                .unwrap_or_else(|| overflow(&env))
-                .checked_div(total_winning_stake)
-                .unwrap_or_else(|| overflow(&env));
-
-            // Pro-rata payout from net losing pool
-            let prize_share = staker_winning_stake
-                .checked_mul(net_losing)
-                .unwrap_or_else(|| overflow(&env))
-                .checked_div(total_winning_stake)
-                .unwrap_or_else(|| overflow(&env));
-
-            let payout = staker_winning_stake
-                .checked_add(prize_share)
-                .unwrap_or_else(|| overflow(&env));
+            let (staker_fee_share, payout) = compute_payout_parts(
+                &env,
+                staker_winning_stake,
+                total_winning_stake,
+                total_fee,
+                net_losing,
+            );
 
             // Mark claimed BEFORE external calls (reentrancy guard)
             env.storage().instance().set(&claimed_key, &true);
 
-            // Transfer fee share
-            if staker_fee_share > 0 {
-                registry_release_escrow(&env, &registry, call_id, &fee_collector, staker_fee_share);
-                emit_fee_collected(&env, call_id, staker_fee_share, &fee_collector);
-            }
+            aggregated_fee_share = aggregated_fee_share
+                .checked_add(staker_fee_share)
+                .unwrap_or_else(|| overflow(&env));
 
             // Release payout to staker
             registry_release_escrow(&env, &registry, call_id, &staker, payout);
 
             emit_payout_claimed(&env, call_id, &staker, payout);
+        }
+
+        if aggregated_fee_share > 0 {
+            registry_release_escrow(
+                &env,
+                &registry,
+                call_id,
+                &fee_collector,
+                aggregated_fee_share,
+            );
+            emit_fee_collected(&env, call_id, aggregated_fee_share, &fee_collector);
         }
     }
 

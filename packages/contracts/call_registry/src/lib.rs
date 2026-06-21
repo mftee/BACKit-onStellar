@@ -92,6 +92,7 @@ use storage::*;
 use types::*;
 
 const MAX_CALL_PAGE_SIZE: u32 = 20;
+const MAX_CALL_STAKERS_PAGE_SIZE: u32 = 50;
 pub const CONTRACT_VERSION: u32 = 1;
 
 /// CallRegistry contract implementation.
@@ -342,7 +343,9 @@ impl CallRegistry {
             let mut i = 0u32;
             let input_len = input.len();
             while i + 3 <= input_len {
-                if out_idx + 4 > out_buf.len() { break; } // safety bound
+                if out_idx + 4 > out_buf.len() {
+                    break;
+                } // safety bound
                 let b0 = input.get(i).unwrap_or(0);
                 let b1 = input.get(i + 1).unwrap_or(0);
                 let b2 = input.get(i + 2).unwrap_or(0);
@@ -423,7 +426,7 @@ impl CallRegistry {
     /// Documentation: DataEntry vs Soroban Storage
     /// * DataEntry: Use for immutable metadata (e.g. IPFS CID at call creation). Costs 0.5 XLM once, free to read off-chain.
     /// * Soroban Storage: Use for mutable state (e.g. stakes, resolution status) that the contract logic must update and read.
-    /// 
+    ///
     /// Cost Comparison:
     /// Storing a 60-byte IPFS string in Soroban persistent storage inflates ledger size and increases rent.
     /// Using a 32-byte hash reference saves ~50% byte allocation in state, while the full CID is available
@@ -574,10 +577,13 @@ impl CallRegistry {
             return Err(CallRegistryError::InvalidPosition);
         }
 
+        let mut outcome_stakers = call.stakes.get(position).unwrap_or_else(|| Map::new(&env));
+        let staker_key = staker.clone();
+        let current_staker_stake = outcome_stakers.get(staker_key.clone()).unwrap_or(0);
+        let updated_staker_stake = current_staker_stake + amount;
+
         // Per-user stake cap
-        let config = get_config(&env).expect("Contract not initialized");
-        let current_stake = get_user_stake(&env, call_id, &staker, position);
-        if config.max_stake_per_user > 0 && current_stake + amount > config.max_stake_per_user {
+        if config.max_stake_per_user > 0 && updated_staker_stake > config.max_stake_per_user {
             panic!("Stake exceeds max_stake_per_user cap");
         }
 
@@ -599,19 +605,11 @@ impl CallRegistry {
         let current_total = call.outcome_stakes.get(position).unwrap_or(0);
         call.outcome_stakes.set(position, current_total + amount);
 
-        let mut outcome_stakers = call.stakes.get(position).unwrap_or_else(|| Map::new(&env));
-        let current_staker_stake = outcome_stakers.get(staker.clone()).unwrap_or(0);
-        outcome_stakers.set(staker.clone(), current_staker_stake + amount);
+        outcome_stakers.set(staker_key.clone(), updated_staker_stake);
         call.stakes.set(position, outcome_stakers);
 
         add_call_staker(&env, call_id, &staker);
-        set_user_stake(
-            &env,
-            call_id,
-            &staker,
-            position,
-            current_staker_stake + amount,
-        );
+        set_user_stake(&env, call_id, &staker, position, updated_staker_stake);
 
         set_call(&env, &call);
         add_staker_call(&env, &staker, call_id);
@@ -963,19 +961,20 @@ impl CallRegistry {
         let total_calls = get_call_counter(&env);
         let page_size = limit.min(MAX_CALL_PAGE_SIZE);
 
-        if page_size == 0 {
+        if page_size == 0 || total_calls == 0 {
             return calls;
         }
 
-        let mut count = 0;
-        let mut current = if start_id < 1 { 1 } else { start_id };
+        let start = if start_id < 1 { 1 } else { start_id };
+        if start > total_calls {
+            return calls;
+        }
+        let end = start.saturating_add(page_size as u64 - 1).min(total_calls);
 
-        while count < page_size && current <= total_calls {
+        for current in start..=end {
             if let Some(call) = get_call(&env, current) {
                 calls.push_back(call);
-                count += 1;
             }
-            current += 1;
         }
 
         calls
@@ -1058,7 +1057,28 @@ impl CallRegistry {
     /// Get all stakers that have participated in a call.
     pub fn get_call_stakers(env: Env, call_id: u64) -> Result<Vec<Address>, CallRegistryError> {
         get_call(&env, call_id).ok_or(CallRegistryError::CallNotFound)?;
-        Ok(storage::get_call_stakers(&env, call_id))
+        Ok(storage::get_call_stakers_bounded(
+            &env,
+            call_id,
+            0,
+            MAX_CALL_STAKERS_PAGE_SIZE,
+        ))
+    }
+
+    /// Get a bounded page of stakers that have participated in a call.
+    pub fn get_call_stakers_paginated(
+        env: Env,
+        call_id: u64,
+        start: u32,
+        limit: u32,
+    ) -> Result<Vec<Address>, CallRegistryError> {
+        get_call(&env, call_id).ok_or(CallRegistryError::CallNotFound)?;
+        Ok(storage::get_call_stakers_bounded(
+            &env,
+            call_id,
+            start,
+            limit.min(MAX_CALL_STAKERS_PAGE_SIZE),
+        ))
     }
 
     /// Get the number of unique stakers that have participated in a call.

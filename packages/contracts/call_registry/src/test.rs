@@ -35,13 +35,19 @@ mod call_registry {
 
     const TEST_MIN_STAKE: i128 = 1_000_000;
     const TEST_START_PRICE: i128 = 100_000_000;
+    const STAKE_ON_CALL_BUDGET_CPU: u64 = 20_000_000;
+    const STAKE_ON_CALL_BUDGET_MEM: u64 = 200_000;
+    const GET_CALLS_PAGINATED_BUDGET_CPU: u64 = 10_000_000;
+    const GET_CALLS_PAGINATED_BUDGET_MEM: u64 = 100_000;
+    const GET_CALL_STAKERS_BUDGET_CPU: u64 = 20_000_000;
+    const GET_CALL_STAKERS_BUDGET_MEM: u64 = 200_000;
 
     /// Spin up a fresh environment with a registered, initialised CallRegistry.
     fn setup() -> (Env, CallRegistryClient<'static>, Address, Address) {
         let env = Env::default();
         env.mock_all_auths();
 
-    let contract_id = env.register(CallRegistry, ());
+        let contract_id = env.register(CallRegistry, ());
         let client = CallRegistryClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
@@ -119,8 +125,27 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: *outcome_count,
-            }
+            },
         )
+    }
+
+    #[derive(Clone, Copy, Debug)]
+    struct BudgetUsage {
+        cpu: u64,
+        mem: u64,
+    }
+
+    fn measure_budget<F>(env: &Env, _cpu_limit: u64, _mem_limit: u64, f: F) -> BudgetUsage
+    where
+        F: FnOnce(),
+    {
+        env.cost_estimate().budget().reset_default();
+        f();
+        let budget = env.cost_estimate().budget();
+        BudgetUsage {
+            cpu: budget.cpu_instruction_cost(),
+            mem: budget.memory_bytes_cost(),
+        }
     }
 
     // ── initialize ────────────────────────────────────────────────────────────
@@ -128,7 +153,7 @@ mod call_registry {
     #[test]
     fn test_initialize() {
         let (env, admin, outcome_manager, _) = create_test_env();
-    let contract_id = env.register(CallRegistry, ());
+        let contract_id = env.register(CallRegistry, ());
         let client = CallRegistryClient::new(&env, &contract_id);
 
         client.initialize(&admin, &outcome_manager, &TEST_MIN_STAKE);
@@ -251,7 +276,7 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: crate::types::ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 2u32,
-            }
+            },
         );
 
         // Read back the stored DataEntry for the metadata hash
@@ -455,7 +480,7 @@ mod call_registry {
             &2,
         );
 
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_default();
         client.stake_on_call(&staker, &call.id, &50_000_000_i128, &1);
 
         let staker_calls = client.get_staker_calls(&staker);
@@ -550,7 +575,7 @@ mod call_registry {
         let stats = client.get_global_stats();
         assert_eq!(stats.total_calls, 2);
 
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_default();
         client.stake_on_call(&staker1, &call1.id, &50_000_000_i128, &1);
         client.stake_on_call(&staker1, &call1.id, &20_000_000_i128, &1);
         client.stake_on_call(&staker2, &call2.id, &30_000_000_i128, &2);
@@ -629,7 +654,7 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 2,
-            }
+            },
         );
 
         assert_eq!(result, Err(Ok(CallRegistryError::InvalidStakeAmount)));
@@ -698,7 +723,7 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 2,
-            }
+            },
         );
 
         assert_eq!(
@@ -736,7 +761,7 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 2,
-            }
+            },
         );
 
         assert_eq!(
@@ -776,7 +801,7 @@ mod call_registry {
             &2,
         );
 
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_default();
 
         let updated_call = client.stake_on_call(&staker, &call.id, &50_000_000_i128, &1);
 
@@ -1416,7 +1441,7 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 3,
-            }
+            },
         );
 
         assert_eq!(call.id, 1);
@@ -1456,10 +1481,10 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 3,
-            }
+            },
         );
 
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_default();
 
         client.stake_on_call(&staker, &call.id, &50_000_000_i128, &1);
         client.stake_on_call(&staker, &call.id, &30_000_000_i128, &2);
@@ -1500,7 +1525,7 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 3,
-            }
+            },
         );
 
         env.ledger().set_timestamp(3000); // after end_ts
@@ -1540,7 +1565,7 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 3,
-            }
+            },
         );
 
         env.ledger().set_timestamp(3000);
@@ -1584,7 +1609,7 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 3,
-            }
+            },
         );
 
         let result = client.try_stake_on_call(&staker, &call.id, &50_000_000_i128, &4);
@@ -1624,10 +1649,10 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 3,
-            }
+            },
         );
 
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_default();
 
         client.stake_on_call(&staker, &call.id, &50_000_000_i128, &1);
         client.stake_on_call(&staker, &call.id, &30_000_000_i128, &2);
@@ -1668,10 +1693,10 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 3,
-            }
+            },
         );
 
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_default();
 
         client.stake_on_call(&staker, &call.id, &50_000_000_i128, &1);
         client.stake_on_call(&staker, &call.id, &30_000_000_i128, &2);
@@ -1719,10 +1744,10 @@ mod call_registry {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000_i128),
                 outcome_count: 3,
-            }
+            },
         );
 
-        env.budget().reset_unlimited();
+        env.cost_estimate().budget().reset_default();
 
         client.stake_on_call(&staker1, &call.id, &50_000_000_i128, &1);
         client.stake_on_call(&staker2, &call.id, &30_000_000_i128, &1);
@@ -2057,6 +2082,217 @@ mod call_registry {
         });
         assert!(!has_warning);
     }
+
+    #[test]
+    fn test_get_call_stakers_paginated_caps_response() {
+        let (env, admin, outcome_manager, creator) = create_test_env();
+        let contract_id = env.register_contract(None, CallRegistry);
+        let client = CallRegistryClient::new(&env, &contract_id);
+
+        client.initialize(&admin, &outcome_manager, &TEST_MIN_STAKE);
+        env.ledger().set_timestamp(1000);
+
+        let stake_token = env.register_contract(None, MockToken);
+        client.whitelist_token(&stake_token);
+        let token_address = Address::generate(&env);
+        let pair_id = Bytes::from_slice(&env, b"USDC/XLM");
+        let metadata_hash = BytesN::from_array(&env, &[0u8; 32]);
+        let call = create_call_with_default_condition(
+            &client,
+            &creator,
+            &stake_token,
+            &100_000_000_i128,
+            &3000u64,
+            &token_address,
+            &pair_id,
+            &metadata_hash,
+            &2,
+        );
+
+        for _ in 0..60u32 {
+            let staker = Address::generate(&env);
+            client.stake_on_call(&staker, &call.id, &TEST_MIN_STAKE, &1u32);
+        }
+
+        let first_page = client.get_call_stakers(&call.id);
+        let second_page = client.get_call_stakers_paginated(&call.id, &50u32, &50u32);
+
+        assert_eq!(first_page.len(), 50);
+        assert_eq!(second_page.len(), 10);
+    }
+
+    #[test]
+    fn test_stake_on_call_stays_within_budget() {
+        let (env, admin, outcome_manager, creator) = create_test_env();
+        let staker = Address::generate(&env);
+        let contract_id = env.register_contract(None, CallRegistry);
+        let client = CallRegistryClient::new(&env, &contract_id);
+
+        client.initialize(&admin, &outcome_manager, &TEST_MIN_STAKE);
+        env.ledger().set_timestamp(1000);
+
+        let stake_token = env.register_contract(None, MockToken);
+        client.whitelist_token(&stake_token);
+        let token_address = Address::generate(&env);
+        let pair_id = Bytes::from_slice(&env, b"USDC/XLM");
+        let metadata_hash = BytesN::from_array(&env, &[0u8; 32]);
+        let call = create_call_with_default_condition(
+            &client,
+            &creator,
+            &stake_token,
+            &100_000_000_i128,
+            &3000u64,
+            &token_address,
+            &pair_id,
+            &metadata_hash,
+            &2,
+        );
+
+        let usage = measure_budget(
+            &env,
+            STAKE_ON_CALL_BUDGET_CPU,
+            STAKE_ON_CALL_BUDGET_MEM,
+            || {
+                client.stake_on_call(&staker, &call.id, &50_000_000_i128, &1u32);
+            },
+        );
+
+        std::println!(
+            "call_registry::stake_on_call cpu={} mem={}",
+            usage.cpu,
+            usage.mem
+        );
+        assert!(usage.cpu <= STAKE_ON_CALL_BUDGET_CPU);
+        assert!(usage.mem <= STAKE_ON_CALL_BUDGET_MEM);
+    }
+
+    #[test]
+    #[should_panic(expected = "ExceededLimit")]
+    fn test_stake_on_call_exceeding_budget_fails() {
+        let (env, admin, outcome_manager, creator) = create_test_env();
+        let staker = Address::generate(&env);
+        let contract_id = env.register_contract(None, CallRegistry);
+        let client = CallRegistryClient::new(&env, &contract_id);
+
+        client.initialize(&admin, &outcome_manager, &TEST_MIN_STAKE);
+        env.ledger().set_timestamp(1000);
+
+        let stake_token = env.register_contract(None, MockToken);
+        client.whitelist_token(&stake_token);
+        let token_address = Address::generate(&env);
+        let pair_id = Bytes::from_slice(&env, b"USDC/XLM");
+        let metadata_hash = BytesN::from_array(&env, &[0u8; 32]);
+        let call = create_call_with_default_condition(
+            &client,
+            &creator,
+            &stake_token,
+            &100_000_000_i128,
+            &3000u64,
+            &token_address,
+            &pair_id,
+            &metadata_hash,
+            &2,
+        );
+
+        env.cost_estimate().budget().reset_limits(50_000, 1_024);
+        client.stake_on_call(&staker, &call.id, &50_000_000_i128, &1u32);
+    }
+
+    #[test]
+    fn test_get_calls_paginated_stays_within_budget() {
+        let (env, client, _admin, _om) = setup();
+        env.ledger().set_timestamp(1000);
+
+        let creator = Address::generate(&env);
+        let stake_token = env.register_contract(None, MockToken);
+        client.whitelist_token(&stake_token);
+        let token_address = Address::generate(&env);
+        let pair_id = Bytes::from_slice(&env, b"USDC/XLM");
+        let metadata_hash = BytesN::from_array(&env, &[0u8; 32]);
+
+        for _ in 0..10u32 {
+            create_call_with_default_condition(
+                &client,
+                &creator,
+                &stake_token,
+                &100_000_000_i128,
+                &3000u64,
+                &token_address,
+                &pair_id,
+                &metadata_hash,
+                &2,
+            );
+        }
+
+        let usage = measure_budget(
+            &env,
+            GET_CALLS_PAGINATED_BUDGET_CPU,
+            GET_CALLS_PAGINATED_BUDGET_MEM,
+            || {
+                let results = client.get_calls_paginated(&1u64, &10u32);
+                assert_eq!(results.len(), 10);
+            },
+        );
+
+        std::println!(
+            "call_registry::get_calls_paginated cpu={} mem={}",
+            usage.cpu,
+            usage.mem
+        );
+        assert!(usage.cpu <= GET_CALLS_PAGINATED_BUDGET_CPU);
+        assert!(usage.mem <= GET_CALLS_PAGINATED_BUDGET_MEM);
+    }
+
+    #[test]
+    fn test_get_call_stakers_stays_within_budget() {
+        let (env, admin, outcome_manager, creator) = create_test_env();
+        let contract_id = env.register_contract(None, CallRegistry);
+        let client = CallRegistryClient::new(&env, &contract_id);
+
+        client.initialize(&admin, &outcome_manager, &TEST_MIN_STAKE);
+        env.ledger().set_timestamp(1000);
+
+        let stake_token = env.register_contract(None, MockToken);
+        client.whitelist_token(&stake_token);
+        let token_address = Address::generate(&env);
+        let pair_id = Bytes::from_slice(&env, b"USDC/XLM");
+        let metadata_hash = BytesN::from_array(&env, &[0u8; 32]);
+        let call = create_call_with_default_condition(
+            &client,
+            &creator,
+            &stake_token,
+            &100_000_000_i128,
+            &3000u64,
+            &token_address,
+            &pair_id,
+            &metadata_hash,
+            &2,
+        );
+
+        for _ in 0..50u32 {
+            let staker = Address::generate(&env);
+            client.stake_on_call(&staker, &call.id, &TEST_MIN_STAKE, &1u32);
+        }
+
+        let usage = measure_budget(
+            &env,
+            GET_CALL_STAKERS_BUDGET_CPU,
+            GET_CALL_STAKERS_BUDGET_MEM,
+            || {
+                let stakers = client.get_call_stakers(&call.id);
+                assert_eq!(stakers.len(), 50);
+            },
+        );
+
+        std::println!(
+            "call_registry::get_call_stakers cpu={} mem={}",
+            usage.cpu,
+            usage.mem
+        );
+        assert!(usage.cpu <= GET_CALL_STAKERS_BUDGET_CPU);
+        assert!(usage.mem <= GET_CALL_STAKERS_BUDGET_MEM);
+    }
+
 }
 
 // ── Native XLM staking tests ──────────────────────────────────────────────────
@@ -2147,7 +2383,7 @@ mod native_xlm {
                 metadata_hash,
                 condition: ConditionType::TargetAbove(105_000_000_i128),
                 outcome_count: 2u32,
-            }
+            },
         )
     }
 
@@ -2385,6 +2621,7 @@ mod native_xlm {
         assert_eq!(up_stake, half_xlm);
         assert_eq!(down_stake, quarter_xlm);
     }
+
 }
 
 // ── SEP-10 tests ─────────────────────────────────────────────────────────────
@@ -2414,7 +2651,12 @@ mod sep10_tests {
         BytesN::from_array(env, &signing_key.verifying_key().to_bytes())
     }
 
-    fn sign(env: &Env, signing_key: &SigningKey, valid_until: u32, home_domain: &[u8]) -> BytesN<64> {
+    fn sign(
+        env: &Env,
+        signing_key: &SigningKey,
+        valid_until: u32,
+        home_domain: &[u8],
+    ) -> BytesN<64> {
         let msg = build_message_native(valid_until, home_domain);
         let sig = signing_key.sign(&msg);
         BytesN::from_array(env, &sig.to_bytes())
@@ -2492,7 +2734,9 @@ mod sep10_tests {
         env.ledger().set_sequence_number(1);
 
         let pubkey = pubkey_to_soroban(&env, &signing_key);
-        let mut sig_bytes = signing_key.sign(&build_message_native(valid_until, home_domain)).to_bytes();
+        let mut sig_bytes = signing_key
+            .sign(&build_message_native(valid_until, home_domain))
+            .to_bytes();
         sig_bytes[0] ^= 0xFF;
         let tampered_token = BytesN::from_array(&env, &sig_bytes);
         let domain_bytes = Bytes::from_slice(&env, home_domain);
@@ -2533,7 +2777,8 @@ mod sep10_tests {
         let token = sign(&env, &signing_key, valid_until, home_domain);
         let domain_bytes = Bytes::from_slice(&env, home_domain);
 
-        let result = client.try_link_sep10_domain(&user, &pubkey, &token, &valid_until, &domain_bytes);
+        let result =
+            client.try_link_sep10_domain(&user, &pubkey, &token, &valid_until, &domain_bytes);
         assert!(result.is_err());
         assert_eq!(client.get_sep10_home_domain(&user), None);
     }

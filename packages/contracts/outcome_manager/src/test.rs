@@ -1,10 +1,17 @@
 #![cfg(test)]
 
+extern crate std;
+
 use soroban_sdk::{contract, contractimpl, testutils::Address as _, Address, BytesN, Env, Vec};
 
 use crate::errors::OutcomeError;
 use crate::storage::{OracleVote, PriceObservation, SignedOutcome};
 use crate::{OutcomeManager, OutcomeManagerClient, MAX_ORACLES};
+
+const CLAIM_PAYOUT_BUDGET_CPU: u64 = 10_000_000;
+const CLAIM_PAYOUT_BUDGET_MEM: u64 = 100_000;
+const BATCH_CLAIM_PAYOUTS_BUDGET_CPU: u64 = 40_000_000;
+const BATCH_CLAIM_PAYOUTS_BUDGET_MEM: u64 = 400_000;
 
 // ─── Test Helpers ─────────────────────────────────────────────────────────────
 
@@ -70,7 +77,7 @@ fn setup_single_oracle(
     Address,
     BytesN<32>,
     BytesN<32>,
-        OutcomeManagerClient<'_>, 
+    OutcomeManagerClient<'_>,
 ) {
     env.mock_all_auths();
     let admin = Address::generate(env);
@@ -99,6 +106,25 @@ fn assert_contract_error<T, E>(
         result,
         Err(Ok(err)) if err == soroban_sdk::Error::from_contract_error(expected as u32)
     ));
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BudgetUsage {
+    cpu: u64,
+    mem: u64,
+}
+
+fn measure_budget<F>(env: &Env, _cpu_limit: u64, _mem_limit: u64, f: F) -> BudgetUsage
+where
+    F: FnOnce(),
+{
+    env.cost_estimate().budget().reset_default();
+    f();
+    let budget = env.cost_estimate().budget();
+    BudgetUsage {
+        cpu: budget.cpu_instruction_cost(),
+        mem: budget.memory_bytes_cost(),
+    }
 }
 
 // ─── Initialization Tests ──────────────────────────────────────────────────────
@@ -826,6 +852,78 @@ fn test_batch_claim_with_fee_deducted() {
     assert!(client.has_claimed(&1u64, &staker1));
     assert!(client.has_claimed(&1u64, &staker2));
     let _ = fee_collector;
+}
+
+#[test]
+fn test_claim_payout_stays_within_budget() {
+    let env = Env::default();
+    let (_, registry_id, client) = setup_with_fee(&env, 500);
+    let staker = Address::generate(&env);
+
+    let usage = measure_budget(
+        &env,
+        CLAIM_PAYOUT_BUDGET_CPU,
+        CLAIM_PAYOUT_BUDGET_MEM,
+        || {
+            client.claim_payout(&registry_id, &1u64, &staker, &100i128, &100i128, &100i128);
+        },
+    );
+
+    std::println!(
+        "outcome_manager::claim_payout cpu={} mem={}",
+        usage.cpu,
+        usage.mem
+    );
+    assert!(usage.cpu <= CLAIM_PAYOUT_BUDGET_CPU);
+    assert!(usage.mem <= CLAIM_PAYOUT_BUDGET_MEM);
+}
+
+#[test]
+fn test_batch_claim_payouts_stays_within_budget() {
+    let env = Env::default();
+    let (_, registry_id, client) = setup_with_fee(&env, 500);
+
+    let mut stakers = Vec::new(&env);
+    let mut stakes = Vec::new(&env);
+    for _ in 0..20u32 {
+        stakers.push_back(Address::generate(&env));
+        stakes.push_back(5_i128);
+    }
+
+    let usage = measure_budget(
+        &env,
+        BATCH_CLAIM_PAYOUTS_BUDGET_CPU,
+        BATCH_CLAIM_PAYOUTS_BUDGET_MEM,
+        || {
+            client.batch_claim_payouts(
+                &registry_id,
+                &1u64,
+                &stakers,
+                &stakes,
+                &100_i128,
+                &100_i128,
+            );
+        },
+    );
+
+    std::println!(
+        "outcome_manager::batch_claim_payouts cpu={} mem={}",
+        usage.cpu,
+        usage.mem
+    );
+    assert!(usage.cpu <= BATCH_CLAIM_PAYOUTS_BUDGET_CPU);
+    assert!(usage.mem <= BATCH_CLAIM_PAYOUTS_BUDGET_MEM);
+}
+
+#[test]
+#[should_panic(expected = "ExceededLimit")]
+fn test_claim_payout_exceeding_budget_fails() {
+    let env = Env::default();
+    let (_, registry_id, client) = setup_with_fee(&env, 500);
+    let staker = Address::generate(&env);
+
+    env.cost_estimate().budget().reset_limits(25_000, 1_024);
+    client.claim_payout(&registry_id, &1u64, &staker, &100i128, &100i128, &100i128);
 }
 
 #[test]

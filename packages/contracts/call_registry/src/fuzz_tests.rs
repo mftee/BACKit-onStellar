@@ -62,7 +62,7 @@ fn create_test_call(
             metadata_hash: metadata_hash.clone(),
             condition: ConditionType::TargetAbove(100_000_000_i128),
             outcome_count: 2,
-        }
+        },
     );
 
     call.id
@@ -332,7 +332,7 @@ fn test_fuzz_extreme_timestamp_near_max() {
                 metadata_hash: metadata_hash.clone(),
                 condition: ConditionType::TargetAbove(100_000_000),
                 outcome_count: 2,
-            }
+            },
         );
 
         let staker = Address::generate(&env);
