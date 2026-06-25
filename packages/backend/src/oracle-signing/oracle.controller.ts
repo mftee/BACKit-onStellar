@@ -17,7 +17,7 @@ import { QUEUE_ORACLE_SIGNING } from '../common/queues/queues.constants';
 
 @ApiTags('Oracle')
 @Controller('oracle')
-export class OracleController {
+export class OracleSigningController {
   constructor(
     private readonly signingService: OracleSigningService,
     @InjectQueue(QUEUE_ORACLE_SIGNING) private readonly oracleQueue: Queue,
