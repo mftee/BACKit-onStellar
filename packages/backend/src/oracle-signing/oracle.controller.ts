@@ -80,7 +80,7 @@ export class OracleSigningController {
     const status = await job.getState();
     return {
       status,
-      result: job.returnvalue ?? null,
+      result: (job.returnvalue as SignedPriceData | null) ?? null,
       failedReason: job.failedReason ?? null,
     };
   }
