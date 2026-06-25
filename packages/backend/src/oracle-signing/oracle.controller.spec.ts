@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { OracleController } from './oracle.controller';
+import { OracleSigningController } from './oracle.controller';
 import { OracleSigningService } from './oracle-signing.service';
 import { SignPriceDto } from './sign-price.dto';
 import { SignedPriceData, OraclePublicKeyResponse } from './oracle.interfaces';
@@ -23,8 +23,8 @@ const mockSigningService: jest.Mocked<Partial<OracleSigningService>> = {
   ),
 };
 
-describe('OracleController', () => {
-  let controller: OracleController;
+describe('OracleSigningController', () => {
+  let controller: OracleSigningController;
   const mockQueue = {
     add: jest.fn(),
     getJob: jest.fn(),
@@ -32,14 +32,14 @@ describe('OracleController', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [OracleController],
+      controllers: [OracleSigningController],
       providers: [
         { provide: OracleSigningService, useValue: mockSigningService },
         { provide: getQueueToken(QUEUE_ORACLE_SIGNING), useValue: mockQueue },
       ],
     }).compile();
 
-    controller = module.get<OracleController>(OracleController);
+    controller = module.get<OracleSigningController>(OracleSigningController);
     jest.clearAllMocks();
   });
 
