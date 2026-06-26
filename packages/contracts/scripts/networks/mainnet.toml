@@ -1,0 +1,12 @@
+[network]
+name = "mainnet"
+rpc_url = "https://mainnet.stellar.validationcloud.io/v1/XM3CxQYh0EAbRlqhEpXflg"
+network_passphrase = "Public Global Stellar Network ; September 2015"
+
+[tokens]
+usdc = "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75"
+xlm_sac = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4"
+whitelist = ["CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75"]
+
+[oracle]
+pubkey = ""

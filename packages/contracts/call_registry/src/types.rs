@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Bytes, BytesN, Map};
+use soroban_sdk::{contracttype, Address, Bytes, BytesN, Map, Vec};
 
 /// Describes the price-movement condition that determines the winning outcome.
 ///
@@ -145,6 +145,11 @@ pub struct ContractConfig {
     /// resolve the call. After this period elapses, stakers can reclaim their
     /// stakes via `claim_expired_refund`. Default: 604800 (7 days).
     pub resolution_grace_period: u64,
+    /// Multi-party admin set. When non-empty, sensitive operations require
+    /// `admin_threshold` signatures from this set. Empty = single-admin mode.
+    pub admin_set: Vec<Address>,
+    /// Minimum number of admin signatures required. Default: 1 (backward compatible).
+    pub admin_threshold: u32,
 }
 
 /// Contract-wide aggregated statistics for dashboards.

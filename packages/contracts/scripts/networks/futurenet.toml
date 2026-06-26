@@ -1,0 +1,12 @@
+[network]
+name = "futurenet"
+rpc_url = "https://rpc-futurenet.stellar.org"
+network_passphrase = "Test SDF Future Network ; October 2022"
+
+[tokens]
+usdc = ""
+xlm_sac = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4"
+whitelist = []
+
+[oracle]
+pubkey = ""
