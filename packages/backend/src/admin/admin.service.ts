@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThanOrEqual } from 'typeorm';
+import { Repository, MoreThanOrEqual, MoreThan } from 'typeorm';
 import { Call, CallStatus } from '../calls/entities/call.entity';
 import { CallReport } from '../calls/entities/call-report.entity';
 import { Users } from '../user/entities/users.entity';
@@ -65,6 +65,46 @@ export class AdminService {
     if (!user.banned) throw new BadRequestException('User is not banned');
     user.banned = false;
     return this.usersRepo.save(user);
+  }
+
+  // ─── Reports ──────────────────────────────────────────────────────────────
+
+  async listReports(page = 1, limit = 20) {
+    const [data, total] = await this.callRepo.findAndCount({
+      where: { reportCount: MoreThan(0) },
+      relations: ['reports'],
+      order: { reportCount: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    return { data, total, page, limit };
+  }
+
+  async dismissReports(callId: string) {
+    const call = await this.findCallOrThrow(callId);
+
+    await this.reportRepo.delete({ callId });
+
+    call.reportCount = 0;
+    return this.callRepo.save(call);
+  }
+
+  async actionReport(callId: string, banCreator = false) {
+    const call = await this.findCallOrThrow(callId);
+
+    call.isHidden = true;
+    await this.callRepo.save(call);
+
+    if (banCreator && call.creatorAddress) {
+      const creator = await this.usersRepo.findOneBy({
+        walletAddress: call.creatorAddress,
+      });
+      if (creator && !creator.banned) {
+        creator.banned = true;
+        await this.usersRepo.save(creator);
+      }
+    }
+    return { message: 'Call hidden and action applied', callId };
   }
 
   // ─── Stats ────────────────────────────────────────────────────────────────

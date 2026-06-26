@@ -6,6 +6,7 @@ import {
   Query,
   UseGuards,
   ParseUUIDPipe,
+  Body,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,6 +18,7 @@ import {
 import { AdminGuard } from '../auth/guards/admin.guard';
 import { AdminService } from './admin.service';
 import { QueryAdminCallsDto } from './dto/query-admin-calls.dto';
+import { ActionReportDto } from './dto/action-report.dto';
 import { Audited } from '../audit/decorators/audited.decorator';
 import { AuditActionType } from '../audit/audit-log.entity';
 
@@ -58,6 +60,50 @@ export class AdminController {
   )
   unhideCall(@Param('id', ParseUUIDPipe) id: string) {
     return this.adminService.unhideCall(id);
+  }
+
+  // ─── Reports ──────────────────────────────────────────────────────────────
+
+  @Get('reports')
+  @ApiOperation({
+    summary:
+      'Paginated list of all reported calls with their individual reports',
+  })
+  listReports(@Query('page') page?: number, @Query('limit') limit?: number) {
+    return this.adminService.listReports(
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 20,
+    );
+  }
+
+  @Post('reports/:id/dismiss')
+  @ApiOperation({ summary: 'Dismiss reports for a call without hiding it' })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Audited(
+    AuditActionType.REPORT_DISMISSED,
+    (ctx) =>
+      `call:${ctx.switchToHttp().getRequest<{ params: { id: string } }>().params.id}`,
+  )
+  dismissReports(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.dismissReports(id);
+  }
+
+  @Post('reports/:id/action')
+  @ApiOperation({
+    summary:
+      'Action a report by hiding the call and optionally banning the creator',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid' })
+  @Audited(
+    AuditActionType.REPORT_ACTIONED,
+    (ctx) =>
+      `call:${ctx.switchToHttp().getRequest<{ params: { id: string } }>().params.id}`,
+  )
+  actionReport(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ActionReportDto,
+  ) {
+    return this.adminService.actionReport(id, dto.banCreator);
   }
 
   // ─── Users ────────────────────────────────────────────────────────────────
