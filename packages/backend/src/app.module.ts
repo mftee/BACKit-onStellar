@@ -12,6 +12,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './user/users.module';
 import { AuthModule } from './auth/auth.module';
+import { ActivityModule } from './activity/activity.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { LoggerModule } from './common/logger/logger.module';
@@ -45,6 +46,7 @@ import { LoggerModule } from './common/logger/logger.module';
     SearchModule,
     UsersModule,
     AuthModule,
+    ActivityModule,
   ],
   controllers: [],
   providers: [{ provide: APP_INTERCEPTOR, useClass: LoggingInterceptor }],

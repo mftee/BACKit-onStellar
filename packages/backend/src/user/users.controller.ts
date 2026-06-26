@@ -150,6 +150,20 @@ export class UsersController {
     return this.usersService.updateProfile(updateProfileDto, avatarFile);
   }
 
+  @Get(':address/referrals')
+  @ApiOperation({ summary: 'Get users referred by this user' })
+  @ApiParam({ name: 'address', description: 'User address' })
+  async getReferrals(@Param('address') address: string) {
+    return this.usersService.getReferrals(address);
+  }
+
+  @Get(':address/referral-stats')
+  @ApiOperation({ summary: 'Get referral statistics' })
+  @ApiParam({ name: 'address', description: 'User address' })
+  async getReferralStats(@Param('address') address: string) {
+    return this.usersService.getReferralStats(address);
+  }
+
   // ─── NEW: profile with badges ─────────────────────────────────────────────
 
   @Get(':address')

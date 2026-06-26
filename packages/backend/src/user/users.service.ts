@@ -255,4 +255,30 @@ export class UsersService {
     await this.invalidateUserProfile(user.walletAddress);
     return this.getUserByAddress(user.walletAddress);
   }
+
+  async getReferrals(address: string) {
+    const user = await this.usersRepo.findOne({ where: { walletAddress: address } });
+    if (!user) throw new NotFoundException('User not found');
+    const referrals = await this.usersRepo.find({ where: { referredBy: { id: user.id } } });
+    return referrals.map(r => ({ walletAddress: r.walletAddress, displayName: r.displayName, createdAt: r.createdAt }));
+  }
+
+  async getReferralStats(address: string) {
+    const user = await this.usersRepo.findOne({ where: { walletAddress: address } });
+    if (!user) throw new NotFoundException('User not found');
+    
+    const total = await this.usersRepo.count({ where: { referredBy: { id: user.id } } });
+    
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    
+    const query = this.usersRepo.createQueryBuilder('user')
+      .where('user.referredById = :id', { id: user.id })
+      .andWhere('user.createdAt >= :startOfMonth', { startOfMonth });
+    
+    const thisMonth = await query.getCount();
+    
+    return { total, thisMonth };
+  }
 }
