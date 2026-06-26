@@ -15,22 +15,17 @@ export const dataSourceOptions: DataSourceOptions = {
   password: process.env.DB_PASSWORD ?? '',
   database: process.env.DB_NAME ?? 'backit',
 
-  // ─── NEVER use synchronize in staging/production ─────────────────────────
+  // NEVER use synchronize in staging/production
   synchronize: false,
 
-  // ─── Entities ────────────────────────────────────────────────────────────
-  // Resolved at runtime so the CLI (which compiles to JS) still finds them.
   entities: [path.join(__dirname, '..', '**', '*.entity.{ts,js}')],
 
-  // ─── Migrations ──────────────────────────────────────────────────────────
   migrations: [path.join(__dirname, 'migrations', '*.{ts,js}')],
   migrationsTableName: 'typeorm_migrations',
 
-  // ─── Logging ─────────────────────────────────────────────────────────────
   logging: !isProduction,
   logger: 'advanced-console',
 
-  // ─── SSL (production) ────────────────────────────────────────────────────
   ssl: isProduction ? { rejectUnauthorized: true } : false,
 };
 
