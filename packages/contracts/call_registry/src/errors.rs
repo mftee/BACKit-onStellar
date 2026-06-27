@@ -36,4 +36,6 @@ pub enum CallRegistryError {
     StakingCutoffActive = 15,
     /// The SEP-10 token's `valid_until` ledger sequence has passed.
     Sep10TokenExpired = 16,
+    /// Re-entrant call detected on a guarded function.
+    ReentrancyDetected = 17,
 }
