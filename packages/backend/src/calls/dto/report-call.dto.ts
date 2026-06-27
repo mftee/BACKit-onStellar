@@ -1,8 +1,7 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEnum } from 'class-validator';
+import { ReportReason } from '../entities/call-report.entity';
 
 export class ReportCallDto {
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  reason?: string;
+  @IsEnum(ReportReason)
+  reason: ReportReason;
 }

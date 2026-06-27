@@ -1,39 +1,28 @@
-import { useState } from "react";
+"use client";
+
+const SORT_OPTIONS = ["Newest", "Ending Soon", "Most Staked", "Trending"] as const;
+const STATUS_OPTIONS = ["All", "Open", "Resolved"] as const;
 
 interface FilterBarProps {
-  onFilterChange: (filters: { status: string | null }) => void;
+  onFilterChange?: (filters: { status: string | null }) => void;
 }
 
 export default function FilterBar({ onFilterChange }: FilterBarProps) {
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
-
-  const filters = [
-    { id: null, label: "All" },
-    { id: "OPEN", label: "Open" },
-    { id: "ENDED", label: "Ended" },
-    { id: "CLAIMS_READY", label: "Claims Ready" },
-  ];
-
-  const handleFilterClick = (filterId: string | null) => {
-    setActiveFilter(filterId);
-    onFilterChange({ status: filterId });
+  const handleStatus = (value: string) => {
+    onFilterChange?.({ status: value ? value.toLowerCase() : null });
   };
 
   return (
-    <div className="flex flex-wrap gap-2 mb-4">
-      {filters.map((filter) => (
-        <button
-          key={filter.id || "all"}
-          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-            activeFilter === filter.id
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
-          onClick={() => handleFilterClick(filter.id)}
-        >
-          {filter.label}
-        </button>
-      ))}
+    <div className="flex flex-wrap gap-2 p-2">
+      <select defaultValue="" onChange={e => handleStatus(e.target.value)} aria-label="Status">
+        {STATUS_OPTIONS.map(o => (
+          <option key={o} value={o === "All" ? "" : o}>{o}</option>
+        ))}
+      </select>
+      <select defaultValue="" aria-label="Sort">
+        <option value="">Sort</option>
+        {SORT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
     </div>
   );
 }
