@@ -14,6 +14,8 @@ import { UsersModule } from './user/users.module';
 import { AuthModule } from './auth/auth.module';
 import { AppThrottlerModule } from './throttler/throttler.module';
 import { OracleSigningModule } from './oracle-signing/oracle.module';
+import { LeaderboardModule } from './leaderboard/leaderboard.module';
+import { CommentsModule } from './comments/comments.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { LoggerModule } from './common/logger/logger.module';
@@ -49,6 +51,8 @@ import { LoggerModule } from './common/logger/logger.module';
     AuthModule,
     AppThrottlerModule,
     OracleSigningModule,
+    LeaderboardModule,
+    CommentsModule,
   ],
   controllers: [],
   providers: [{ provide: APP_INTERCEPTOR, useClass: LoggingInterceptor }],

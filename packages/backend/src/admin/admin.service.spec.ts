@@ -43,6 +43,7 @@ const mockCallRepo = () => ({
 
 const mockReportRepo = () => ({
   createQueryBuilder: jest.fn(),
+  delete: jest.fn(),
 });
 
 const mockUsersRepo = () => ({
@@ -206,6 +207,53 @@ describe('AdminService', () => {
       usersRepo.findOneBy.mockResolvedValue(makeUser({ banned: false }));
       await expect(service.unbanUser('0xABCDEF')).rejects.toThrow(
         BadRequestException,
+      );
+    });
+  });
+
+  // ── Reports ────────────────────────────────────────────────────────────────
+
+  describe('listReports', () => {
+    it('returns calls with reports', async () => {
+      callRepo.findAndCount.mockResolvedValue([[{ id: 'c1' }], 1]);
+      const result = await service.listReports(1, 10);
+      expect(callRepo.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({ relations: ['reports'] }),
+      );
+      expect(result.data.length).toBe(1);
+    });
+  });
+
+  describe('dismissReports', () => {
+    it('deletes reports and resets count', async () => {
+      const call = makeCall({ id: 'c1', reportCount: 5 });
+      callRepo.findOneBy.mockResolvedValue(call);
+      callRepo.save.mockResolvedValue({ ...call, reportCount: 0 });
+
+      await service.dismissReports('c1');
+
+      expect(reportRepo.delete).toHaveBeenCalledWith({ callId: 'c1' });
+      expect(callRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ reportCount: 0 }),
+      );
+    });
+  });
+
+  describe('actionReport', () => {
+    it('hides call and bans creator', async () => {
+      const call = makeCall({ id: 'c1', creatorAddress: '0xABC' });
+      const user = makeUser({ walletAddress: '0xABC', banned: false });
+
+      callRepo.findOneBy.mockResolvedValue(call);
+      usersRepo.findOneBy.mockResolvedValue(user);
+
+      await service.actionReport('c1', true);
+
+      expect(callRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isHidden: true }),
+      );
+      expect(usersRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ banned: true }),
       );
     });
   });

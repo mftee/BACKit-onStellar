@@ -24,6 +24,8 @@ export enum AuditActionType {
   // Call moderation
   CALL_HIDDEN = 'CALL_HIDDEN',
   CALL_UNHIDDEN = 'CALL_UNHIDDEN',
+  REPORT_DISMISSED = 'REPORT_DISMISSED',
+  REPORT_ACTIONED = 'REPORT_ACTIONED',
 
   // User moderation
   USER_BANNED = 'USER_BANNED',
