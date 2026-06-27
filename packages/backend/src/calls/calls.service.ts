@@ -4,7 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import { CallsRepository } from './calls.repository';
 import { CallReport } from './entities/call-report.entity';
 import { ReportCallDto } from './dto/report-call.dto';
@@ -97,6 +97,20 @@ export class CallsService {
   async reportCall(id: string, reporterAddress: string, dto: ReportCallDto) {
     const call = await this.callsRepository.findOne({ where: { id } });
     if (!call) throw new NotFoundException('Call not found');
+
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentReports = await this.callReportRepository.count({
+      where: {
+        reporterAddress,
+        createdAt: MoreThan(oneHourAgo),
+      },
+    });
+
+    if (recentReports >= 10) {
+      throw new ConflictException(
+        'Rate limit exceeded: max 10 reports per hour',
+      );
+    }
 
     const alreadyReported = await this.callReportRepository.findOne({
       where: { callId: id, reporterAddress },

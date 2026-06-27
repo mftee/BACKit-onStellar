@@ -9,6 +9,14 @@ import {
 } from 'typeorm';
 import { Call } from './call.entity';
 
+export enum ReportReason {
+  SPAM = 'SPAM',
+  MISLEADING = 'MISLEADING',
+  OFFENSIVE = 'OFFENSIVE',
+  MARKET_MANIPULATION = 'MARKET_MANIPULATION',
+  OTHER = 'OTHER',
+}
+
 @Entity('call_reports')
 @Unique(['callId', 'reporterAddress'])
 export class CallReport {
@@ -21,8 +29,8 @@ export class CallReport {
   @Column({ type: 'varchar', length: 42 })
   reporterAddress: string;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
-  reason: string;
+  @Column({ type: 'enum', enum: ReportReason, default: ReportReason.OTHER })
+  reason: ReportReason;
 
   @ManyToOne(() => Call, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'callId' })

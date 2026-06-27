@@ -11,9 +11,16 @@ describe('CallsService', () => {
 
   const callsRepository = {
     findFeedByFollowing: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn(),
   };
 
-  const callReportRepository = {};
+  const callReportRepository = {
+    count: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn(),
+    save: jest.fn(),
+  };
   const oracleService = {};
   const ipfsService = {};
 
@@ -65,5 +72,41 @@ describe('CallsService', () => {
     expect(result.total).toBe(0);
     expect(result.page).toBe(1);
     expect(result.limit).toBe(20);
+  });
+
+  describe('reportCall', () => {
+    it('throws rate limit exception if over 10 reports in an hour', async () => {
+      callsRepository.findOne.mockResolvedValue({ id: 'c1' });
+      callReportRepository.count.mockResolvedValue(10);
+
+      await expect(
+        service.reportCall('c1', 'addr', { reason: 'SPAM' as any }),
+      ).rejects.toThrow('Rate limit exceeded: max 10 reports per hour');
+    });
+
+    it('allows report if under 10 reports in an hour', async () => {
+      const call = { id: 'c1', reportCount: 0, isHidden: false };
+      callsRepository.findOne.mockResolvedValue(call);
+      callReportRepository.count.mockResolvedValue(9);
+      callReportRepository.findOne.mockResolvedValue(null);
+      callReportRepository.create.mockReturnValue({
+        callId: 'c1',
+        reporterAddress: 'addr',
+        reason: 'SPAM',
+      });
+      callReportRepository.save.mockResolvedValue(null);
+
+      const result = await service.reportCall('c1', 'addr', {
+        reason: 'SPAM' as any,
+      });
+
+      expect(result.reportCount).toBe(1);
+      expect(result.isHidden).toBe(false);
+      expect(callsRepository.save).toHaveBeenCalledWith({
+        id: 'c1',
+        reportCount: 1,
+        isHidden: false,
+      });
+    });
   });
 });
