@@ -14,6 +14,8 @@ import { UsersModule } from './user/users.module';
 import { AuthModule } from './auth/auth.module';
 import { GatewaysModule } from './gateways/gateways.module';
 import { AuditModule } from './audit/audit.module';
+import { RelayModule } from './relay/relay.module';
+import { FirewallModule } from './firewall/firewall.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { CommentsModule } from './comments/comments.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
@@ -51,6 +53,8 @@ import { LoggerModule } from './common/logger/logger.module';
     AuthModule,
     GatewaysModule,
     AuditModule,
+    RelayModule,
+    FirewallModule,
     LeaderboardModule,
     CommentsModule,
   ],
