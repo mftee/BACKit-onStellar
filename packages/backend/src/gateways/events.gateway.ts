@@ -111,45 +111,46 @@ export class EventsGateway
    *   emit('market:subscribed', { marketId })   on success
    *   emit('error', { message })                on failure
    */
-  @SubscribeMessage('market:subscribe')
-  handleMarketSubscribe(
-    @MessageBody() data: { marketId: string },
+  @SubscribeMessage('subscribe:call')
+  handleCallSubscribe(
+    @MessageBody() data: { call_id: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const { marketId } = data ?? {};
+    const { call_id } = data ?? {};
 
-    if (!marketId || typeof marketId !== 'string') {
-      client.emit('error', { message: 'marketId is required' });
+    if (!call_id || typeof call_id !== 'string') {
+      client.emit('error', { message: 'call_id is required' });
       return;
     }
 
-    const room = marketRoom(marketId);
+    const room = `call:${call_id}`;
+    const roomsCount = Array.from(client.rooms.keys()).filter(r => r.startsWith('call:')).length;
+    
+    if (roomsCount >= 10) {
+      client.emit('error', { message: 'Maximum 10 room subscriptions allowed' });
+      return;
+    }
+
     client.join(room);
     this.logger.log(`Socket ${client.id} joined room "${room}"`);
 
-    client.emit('market:subscribed', { marketId });
+    client.emit('call:subscribed', { call_id });
   }
 
-  /**
-   * Unsubscribe from a market room.
-   *
-   * Client → server:
-   *   emit('market:unsubscribe', { marketId: 'abc123' })
-   */
-  @SubscribeMessage('market:unsubscribe')
-  handleMarketUnsubscribe(
-    @MessageBody() data: { marketId: string },
+  @SubscribeMessage('unsubscribe:call')
+  handleCallUnsubscribe(
+    @MessageBody() data: { call_id: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const { marketId } = data ?? {};
+    const { call_id } = data ?? {};
 
-    if (!marketId) return;
+    if (!call_id) return;
 
-    const room = marketRoom(marketId);
+    const room = `call:${call_id}`;
     client.leave(room);
     this.logger.log(`Socket ${client.id} left room "${room}"`);
 
-    client.emit('market:unsubscribed', { marketId });
+    client.emit('call:unsubscribed', { call_id });
   }
 
   // -------------------------------------------------------------------------
@@ -166,7 +167,7 @@ export class EventsGateway
    *   emit('user:subscribed', { userId })   on success
    *   emit('error', { message })            on failure
    */
-  @SubscribeMessage('user:subscribe')
+  @SubscribeMessage('subscribe:user')
   async handleUserSubscribe(
     @MessageBody() data: { token: string },
     @ConnectedSocket() client: Socket,
@@ -235,24 +236,18 @@ export class EventsGateway
    *
    * Internal event name: 'stake.created'  (matches Issue 9 convention)
    */
-  @OnEvent('stake.created')
-  onStakeCreated(payload: StakeCreatedPayload) {
-    const room = marketRoom(payload.marketId);
-    this.logger.debug(`Broadcasting stake.created to room "${room}"`);
-    this.server.to(room).emit('stake:created', payload);
+  @OnEvent('indexer.StakeAdded')
+  onStakeAdded(payload: { call_id: string; poolTotals: any; participantList: any[] }) {
+    const room = `call:${payload.call_id}`;
+    this.logger.debug(`Broadcasting StakeAdded to room "${room}"`);
+    this.server.to(room).emit('StakeAdded', payload);
   }
 
-  /**
-   * Fired when market prices are updated (e.g. odds change).
-   * Broadcasts to all clients in the affected market room.
-   *
-   * Internal event name: 'market.priceUpdated'
-   */
-  @OnEvent('market.priceUpdated')
-  onMarketPriceUpdated(payload: MarketPriceUpdatedPayload) {
-    const room = marketRoom(payload.marketId);
-    this.logger.debug(`Broadcasting market.priceUpdated to room "${room}"`);
-    this.server.to(room).emit('market:priceUpdated', payload);
+  @OnEvent('indexer.CallResolved')
+  onCallResolved(payload: { call_id: string; outcome: any }) {
+    const room = `call:${payload.call_id}`;
+    this.logger.debug(`Broadcasting CallResolved to room "${room}"`);
+    this.server.to(room).emit('CallResolved', payload);
   }
 
   /**
