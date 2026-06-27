@@ -12,6 +12,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { SearchModule } from './search/search.module';
 import { UsersModule } from './user/users.module';
 import { AuthModule } from './auth/auth.module';
+import { GatewaysModule } from './gateways/gateways.module';
+import { AuditModule } from './audit/audit.module';
 import { ActivityModule } from './activity/activity.module';
 import { RelayModule } from './relay/relay.module';
 import { FirewallModule } from './firewall/firewall.module';
@@ -50,6 +52,8 @@ import { LoggerModule } from './common/logger/logger.module';
     SearchModule,
     UsersModule,
     AuthModule,
+    GatewaysModule,
+    AuditModule,
     ActivityModule,
     RelayModule,
     FirewallModule,
