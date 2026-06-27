@@ -78,6 +78,7 @@ mod errors;
 mod events;
 #[cfg(test)]
 mod fuzz_tests;
+mod governance;
 mod sep10;
 mod shares;
 mod storage;
@@ -90,6 +91,15 @@ use errors::CallRegistryError;
 use events::*;
 use storage::*;
 use types::*;
+
+macro_rules! reentrancy_guard {
+    ($env:expr) => {
+        if storage::is_locked($env) {
+            return Err(CallRegistryError::ReentrancyDetected);
+        }
+        storage::acquire_lock($env);
+    };
+}
 
 const MAX_CALL_PAGE_SIZE: u32 = 20;
 const MAX_CALL_STAKERS_PAGE_SIZE: u32 = 50;
@@ -161,6 +171,8 @@ impl CallRegistry {
             staking_cutoff_secs: 300,
             share_wasm_hash: None,
             resolution_grace_period: 604800,
+            admin_set: Vec::new(&env),
+            admin_threshold: 1,
         };
 
         set_config(&env, &config);
@@ -209,6 +221,7 @@ impl CallRegistry {
         args: CallInitArgs,
     ) -> Result<Call, CallRegistryError> {
         creator.require_auth();
+        reentrancy_guard!(&env);
 
         let CallInitArgs {
             stake_token,
@@ -421,6 +434,7 @@ impl CallRegistry {
         env.storage().persistent().set(&key_cid, &cid_b64);
         env.storage().persistent().set(&key_hash, &hash_b64);
 
+        storage::release_lock(&env);
         Ok(call)
     }
 
@@ -537,6 +551,7 @@ impl CallRegistry {
         position: u32,
     ) -> Result<Call, CallRegistryError> {
         staker.require_auth();
+        reentrancy_guard!(&env);
 
         if amount <= 0 {
             return Err(CallRegistryError::InvalidStakeAmount);
@@ -624,6 +639,7 @@ impl CallRegistry {
             emit_stake_added(&env, call_id, &staker, amount, position);
         }
 
+        storage::release_lock(&env);
         Ok(call)
     }
 
@@ -780,6 +796,7 @@ impl CallRegistry {
         let config = get_config(&env).ok_or(CallRegistryError::NotInitialized)?;
         assert!(!config.paused, "Contract is paused");
         config.outcome_manager.require_auth();
+        reentrancy_guard!(&env);
 
         let mut call = get_call(&env, call_id).ok_or(CallRegistryError::CallNotFound)?;
 
@@ -822,6 +839,7 @@ impl CallRegistry {
 
         emit_call_resolved(&env, call_id, outcome, end_price);
 
+        storage::release_lock(&env);
         Ok(call)
     }
 
@@ -883,6 +901,83 @@ impl CallRegistry {
     /// Propagates errors from [`admin::set_admin`].
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), CallRegistryError> {
         admin::set_admin(env, new_admin)
+    }
+
+    /// Configure multi-party admin set and threshold (requires current admin signature).
+    /// Threshold=1 is backward-compatible single-admin behavior. Max 10 admins.
+    /// Emits AdminSetUpdated event.
+    pub fn set_admin_set(
+        env: Env,
+        new_admins: Vec<Address>,
+        new_threshold: u32,
+    ) -> Result<(), CallRegistryError> {
+        let mut config = get_config(&env).ok_or(CallRegistryError::NotInitialized)?;
+        config.admin.require_auth();
+        if new_threshold == 0 || new_threshold as usize > new_admins.len() as usize {
+            panic!("threshold must be >= 1 and <= admin_set length");
+        }
+        config.admin_set = new_admins.clone();
+        config.admin_threshold = new_threshold;
+        set_config(&env, &config);
+        env.events().publish(
+            ("call_registry", "AdminSetUpdated"),
+            (new_admins, new_threshold),
+        );
+        Ok(())
+    }
+
+    /// Return the current admin set and threshold.
+    pub fn get_admin_set(env: Env) -> Result<(Vec<Address>, u32), CallRegistryError> {
+        let config = get_config(&env).ok_or(CallRegistryError::NotInitialized)?;
+        Ok((config.admin_set, config.admin_threshold))
+    }
+
+    // ── On-Chain Governance ──────────────────────────────────────────────────
+
+    /// Create a governance proposal to change a contract parameter.
+    /// Proposer must have at least `proposal_threshold` total stake volume.
+    pub fn propose_change(
+        env: Env,
+        proposer: Address,
+        parameter: Symbol,
+        new_value_bytes: soroban_sdk::Bytes,
+        voting_end_ledger: u32,
+        proposer_stake_volume: i128,
+    ) -> u64 {
+        governance::propose_change(&env, proposer, parameter, new_value_bytes, voting_end_ledger, proposer_stake_volume)
+    }
+
+    /// Cast a vote on a governance proposal. Voting power = voter's stake volume.
+    pub fn governance_vote(
+        env: Env,
+        voter: Address,
+        proposal_id: u64,
+        support: bool,
+        voter_stake_volume: i128,
+    ) {
+        governance::vote(&env, voter, proposal_id, support, voter_stake_volume)
+    }
+
+    /// Execute a passed proposal after the voting period ends.
+    pub fn execute_proposal(env: Env, proposal_id: u64, total_platform_stake: i128) {
+        governance::execute_proposal(&env, proposal_id, total_platform_stake);
+    }
+
+    /// Get a specific proposal by ID.
+    pub fn get_proposal(env: Env, proposal_id: u64) -> governance::GovernanceProposal {
+        governance::get_proposal(&env, proposal_id)
+    }
+
+    /// Get all currently active (open) proposals.
+    pub fn get_active_proposals(env: Env) -> Vec<governance::GovernanceProposal> {
+        governance::get_active_proposals(&env)
+    }
+
+    /// Update governance configuration (admin only).
+    pub fn set_governance_config(env: Env, cfg: governance::GovernanceConfig) -> Result<(), CallRegistryError> {
+        let config = get_config(&env).ok_or(CallRegistryError::NotInitialized)?;
+        governance::set_governance_config(&env, &config.admin, cfg);
+        Ok(())
     }
 
     /// Replace the outcome manager (admin only).
